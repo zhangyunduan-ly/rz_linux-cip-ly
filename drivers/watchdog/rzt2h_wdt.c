@@ -191,6 +191,27 @@ static int rzt2h_wdt_probe(struct platform_device *pdev)
 	unsigned long rate;
 	int ret;
 
+	{
+		/* FIXME: Hard code to access to ICU registers until can find
+		 * another way. PERIERR_RSTMSKn register is belong to ICU used
+		 * to mask/unmask Peripheral Error Event Reset
+		 */
+		u32 reg;
+		void __iomem *icu_base = ioremap(0x802A0000, 0x1000);
+
+		// Clear Peripheral Error Event Reset status
+		reg = 0;
+		reg |= 0x0001E000;
+		iowrite32(reg, icu_base + 0xc8);
+
+		// Unmask Peripheral Error Event Reset
+		reg = ioread32(icu_base + 0xb0);
+		reg &= ~0x0001E000;
+		iowrite32(reg, icu_base + 0xb0);
+
+		iounmap(icu_base);
+	}
+
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
