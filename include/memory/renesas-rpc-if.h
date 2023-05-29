@@ -60,7 +60,7 @@ struct rpcif_op {
 enum rpcif_type {
 	RPCIF_RCAR_GEN3,
 	RPCIF_RZ_G2L,
-	XSPI_RZ_G3S,
+	XSPI_RZ_T2H,
 };
 
 struct rpcif {
