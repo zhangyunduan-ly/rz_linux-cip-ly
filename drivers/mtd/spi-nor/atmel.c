@@ -69,6 +69,7 @@ static const struct flash_info atmel_parts[] = {
 
 	/* Dialog */
 	{ "at25ql128a",	 INFO(0x1f4218, 0, 64 * 1024,  256, SECT_4K | SPI_NOR_QUAD_READ) },
+	{ "at25sf128a",  INFO(0x1f8901, 0, 64 * 1024,  256, SECT_4K | SPI_NOR_QUAD_READ) },
 
 	{ "at25sl321",	INFO(0x1f4216, 0, 64 * 1024, 64,
 			     SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
