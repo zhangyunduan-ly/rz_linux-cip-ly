@@ -25,7 +25,12 @@ static void rpcif_spi_mem_prepare(struct spi_device *spi_dev,
 	struct rpcif *rpc = spi_controller_get_devdata(spi_dev->controller);
 	struct rpcif_op rpc_op = { };
 
-	rpc_op.cmd.opcode = spi_op->cmd.opcode;
+	if (spi_op->cmd.buswidth == 8) {
+		rpc_op.ocmd.opcode = spi_op->cmd.opcode & 0xff;
+		rpc_op.ocmd.buswidth = spi_op->cmd.buswidth;
+		rpc_op.cmd.opcode = (spi_op->cmd.opcode >> 8 ) & 0xff;
+	} else
+		rpc_op.cmd.opcode = spi_op->cmd.opcode;
 	rpc_op.cmd.buswidth = spi_op->cmd.buswidth;
 
 	if (spi_op->addr.nbytes) {
