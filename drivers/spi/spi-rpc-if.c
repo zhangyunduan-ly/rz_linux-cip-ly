@@ -71,12 +71,16 @@ static void rpcif_spi_mem_prepare(struct spi_device *spi_dev,
 static bool rpcif_spi_mem_supports_op(struct spi_mem *mem,
 				      const struct spi_mem_op *op)
 {
+	struct rpcif *rpc =
+		spi_controller_get_devdata(mem->spi->controller);
+	int max = (rpc->ctlr->mem_caps && rpc->ctlr->mem_caps->dtr) ? 8 : 4;	/* buswidth supported*/
+
 	if (!spi_mem_default_supports_op(mem, op))
 		return false;
 
-	if (op->data.buswidth > 4 || op->addr.buswidth > 4 ||
-	    op->dummy.buswidth > 4 || op->cmd.buswidth > 4 ||
-	    op->addr.nbytes > 4)
+	if (op->data.buswidth > max || op->addr.buswidth > max ||
+	    op->dummy.buswidth > max || op->cmd.buswidth > max ||
+	    op->addr.nbytes > max)
 		return false;
 
 	return true;
@@ -171,6 +175,7 @@ static int rpcif_spi_probe(struct platform_device *pdev)
 {
 	struct device *parent = pdev->dev.parent;
 	struct spi_controller *ctlr;
+	struct spi_controller_mem_caps *spi_mem_caps;
 	struct rpcif *rpc;
 	int error;
 
@@ -179,6 +184,7 @@ static int rpcif_spi_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	rpc = spi_controller_get_devdata(ctlr);
+	rpc->ctlr = ctlr;
 
 	if (of_device_is_compatible(parent->of_node, "renesas,t2h-xspi-if"))
 		rpc->ops = &xspi_ops;
@@ -195,11 +201,24 @@ static int rpcif_spi_probe(struct platform_device *pdev)
 
 	rpcif_enable_rpm(rpc);
 
+	spi_mem_caps = devm_kzalloc(&pdev->dev, sizeof(*spi_mem_caps), GFP_KERNEL);
+	if (of_property_read_bool(parent->of_node,
+						"renesas,xspi-8bit-dtr")) {
+		spi_mem_caps->dtr = true;
+		spi_mem_caps->dtr_swab16 = false;
+	} else if (of_property_read_bool(parent->of_node,
+					       "renesas,xspi-8bit-dtr-swap")) {
+		spi_mem_caps->dtr = true;
+		spi_mem_caps->dtr_swab16 = true;
+	}
+
 	ctlr->num_chipselect = 1;
 	ctlr->mem_ops = &rpcif_spi_mem_ops;
+	ctlr->mem_caps = spi_mem_caps;
 
 	ctlr->bits_per_word_mask = SPI_BPW_MASK(8);
-	ctlr->mode_bits = SPI_CPOL | SPI_CPHA | SPI_TX_QUAD | SPI_RX_QUAD;
+	ctlr->mode_bits = SPI_CPOL | SPI_CPHA | SPI_TX_QUAD | SPI_RX_QUAD |
+						SPI_TX_OCTAL | SPI_RX_OCTAL;
 	ctlr->flags = SPI_CONTROLLER_HALF_DUPLEX;
 
 	error = rpc->ops->hw_init(rpc, false);
