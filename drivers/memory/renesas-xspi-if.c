@@ -15,6 +15,8 @@
 #include <linux/of_device.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
+#include <linux/spi/spi.h>
+#include <linux/spi/spi-mem.h>
 
 #include <memory/renesas-rpc-if.h>
 #include <memory/renesas-xspi-if.h>
@@ -241,6 +243,37 @@
 #define PROTO_2S_2S_2S		0x49
 #define PROTO_1S_4S_4S		0x090
 #define PROTO_4S_4S_4S		0x092
+#define PROTO_8D_8D_8D		0x3ff
+
+#define IS_DTR_SWAP16(priv)	(((priv)->ctlr->mem_caps && \
+				(priv)->proto == PROTO_8D_8D_8D) ? \
+				(priv)->ctlr->mem_caps->dtr_swab16 : 0 )
+
+void memcpy_fromio_swapw(void *to, const volatile void __iomem *from, size_t count)
+{
+	u8 tmp;
+
+	if (count % 2) count++;
+		while (count >= 2) {
+		tmp = __raw_readb(from++);
+		*(u8 *)to++ = __raw_readb(from++);
+		*(u8 *)to++ = tmp;
+		count-=2;
+	}
+}
+
+void memcpy_toio_swapw(volatile void __iomem *to, const void *from, size_t count)
+{
+	u8 *tmp;
+
+	if (count % 2) count++;
+		while (count >= 2) {
+		tmp = (u8 *)from++;
+		__raw_writeb(*(u8 *)from++, to++);
+		__raw_writeb(*(u8 *)tmp, to++);
+		count-=2;
+	}
+}
 
 static const struct regmap_range xspi_volatile_ranges[] = {
 	regmap_reg_range(XSPI_CDD0BUF0, XSPI_CDD0BUF0),
@@ -417,7 +450,8 @@ void xspi_prepare(struct rpcif *xspi, const struct rpcif_op *op, u64 *offs,
 	}
 
 	if (op->dummy.buswidth)
-		xspi->dummy = op->dummy.ncycles;
+		xspi->dummy = op->dummy.buswidth == 8 ?
+			op->dummy.ncycles / 2 : op->dummy.ncycles;
 
 	xspi->dir = op->data.dir;
 	if (op->data.buswidth) {
@@ -443,6 +477,10 @@ void xspi_prepare(struct rpcif *xspi, const struct rpcif_op *op, u64 *offs,
 	} else if (op->cmd.buswidth == 4 &&
 			(op->addr.buswidth == 4 || op->data.buswidth == 4)) {
 		xspi->proto = PROTO_4S_4S_4S;
+	} else if (op->cmd.buswidth == 8 ||
+			(op->addr.buswidth == 8 || op->data.buswidth == 8)) {
+		xspi->proto = PROTO_8D_8D_8D;
+		xspi->bus_size = 2;
 	}
 }
 EXPORT_SYMBOL(xspi_prepare);
@@ -460,9 +498,14 @@ int xspi_manual_xfer(struct rpcif *xspi)
 	regmap_update_bits(xspi->regmap, XSPI_CDCTL0,
 			XSPI_CDCTL0_TRREQ, 0);
 
-	regmap_write(xspi->regmap, XSPI_CDTBUF0,
-			XSPI_CDTBUF_CMDSIZE(0x1) |
-			XSPI_CDTBUF_CMD_FIELD(xspi->command));
+	if (xspi->proto == PROTO_8D_8D_8D)
+		regmap_write(xspi->regmap, XSPI_CDTBUF0,
+				XSPI_CDTBUF_CMDSIZE(0x2) |
+				XSPI_CDTBUF_CMD(xspi->command));
+	else
+		regmap_write(xspi->regmap, XSPI_CDTBUF0,
+				XSPI_CDTBUF_CMDSIZE(0x1) |
+				XSPI_CDTBUF_CMD_FIELD(xspi->command));
 
 	regmap_write(xspi->regmap, XSPI_CDABUF0, 0);
 
@@ -496,7 +539,15 @@ int xspi_manual_xfer(struct rpcif *xspi)
 
 			xspi->xfer_size = nbytes;
 
-			memcpy(data, xspi->buffer + pos, nbytes);
+			/* In DTR mode, data maybe written in word unit (2 bytes) instead of byte unit (1 byte).
+			 * In word unit, the byte order in a unit can be swapped (D1-D0 as a word) or not be
+			 * swapped (D0-D1 as a word). Therefore, if it is a swapped word unit, the write data
+			 * should be swapped before writing to flash.
+			 */
+			if (IS_DTR_SWAP16(xspi))
+				memcpy_fromio_swapw(data, xspi->buffer + pos, nbytes);
+			else
+				memcpy(data, xspi->buffer + pos, nbytes);
 
 			if (nbytes > 4) {
 				xspi->xfer_size = 4;
@@ -569,7 +620,15 @@ int xspi_manual_xfer(struct rpcif *xspi)
 				regmap_read(xspi->regmap, XSPI_CDD0BUF0, p);
 			}
 
-			memcpy(xspi->buffer + pos, data, nbytes);
+			/* In DTR mode, data maybe read in word unit (2 bytes) instead of byte unit (1 byte).
+			 * In word unit, the byte order in a unit can be swapped (D1-D0 as a word) or not be
+			 * swapped (D0-D1 as a word). Therefore, if it is a swapped word unit, the read value
+			 * should be swapped again to get the correct value.
+			 */
+			if (IS_DTR_SWAP16(xspi))
+				memcpy_toio_swapw(xspi->buffer + pos, data, nbytes);
+			else
+				memcpy(xspi->buffer + pos, data, nbytes);
 
 			regmap_update_bits(xspi->regmap, XSPI_INTC,
 					XSPI_INTC_CMDCMPC, XSPI_INTC_CMDCMPC);
@@ -622,14 +681,23 @@ ssize_t xspi_dirmap_write(struct rpcif *xspi, u64 offs, size_t len, const void *
 
 	pm_runtime_get_sync(xspi->dev);
 
-	regmap_update_bits(xspi->regmap, XSPI_CMCFG0CS0,
-			XSPI_CMCFG0_FFMT(0x3) | XSPI_CMCFG0_ADDSIZE(0x3),
-			XSPI_CMCFG0_FFMT(0) | XSPI_CMCFG0_ADDSIZE(addsize));
-
-	regmap_update_bits(xspi->regmap, XSPI_CMCFG2CS0,
-			XSPI_CMCFG2_WRCMD_UPPER(0xff) | XSPI_CMCFG2_WRLATE(0x1f),
-			XSPI_CMCFG2_WRCMD_UPPER(xspi->command) |
-			XSPI_CMCFG2_WRLATE(xspi->dummy));
+	if (xspi->proto == PROTO_8D_8D_8D) {
+		regmap_update_bits(xspi->regmap, XSPI_CMCFG0CS0,
+				XSPI_CMCFG0_FFMT(0x3) | XSPI_CMCFG0_ADDSIZE(0x3),
+				XSPI_CMCFG0_FFMT(1) | XSPI_CMCFG0_ADDSIZE(addsize));
+		regmap_update_bits(xspi->regmap, XSPI_CMCFG2CS0,
+				XSPI_CMCFG2_WRCMD(0xffff) | XSPI_CMCFG2_WRLATE(0x1f),
+				XSPI_CMCFG2_WRCMD(xspi->command) |
+				XSPI_CMCFG2_WRLATE(xspi->dummy));
+	} else {
+		regmap_update_bits(xspi->regmap, XSPI_CMCFG0CS0,
+				XSPI_CMCFG0_FFMT(0x3) | XSPI_CMCFG0_ADDSIZE(0x3),
+				XSPI_CMCFG0_FFMT(0) | XSPI_CMCFG0_ADDSIZE(addsize));
+		regmap_update_bits(xspi->regmap, XSPI_CMCFG2CS0,
+				XSPI_CMCFG2_WRCMD_UPPER(0xff) | XSPI_CMCFG2_WRLATE(0x1f),
+				XSPI_CMCFG2_WRCMD_UPPER(xspi->command) |
+				XSPI_CMCFG2_WRLATE(xspi->dummy));
+	}
 
 	regmap_update_bits(xspi->regmap, XSPI_BMCTL0,
 			XSPI_BMCTL0_CS0ACC(0xff), XSPI_BMCTL0_CS0ACC(0x03));
@@ -643,7 +711,15 @@ ssize_t xspi_dirmap_write(struct rpcif *xspi, u64 offs, size_t len, const void *
 	regmap_update_bits(xspi->regmap, XSPI_LIOCFGCS0, XSPI_LIOCFG_PRTMD(0x3ff),
 			XSPI_LIOCFG_PRTMD(xspi->proto));
 
-	memcpy_toio(xspi->dirmap + from, buf, writebytes);
+	/* In DTR mode, data maybe written in word unit (2 bytes) instead of byte unit (1 byte).
+	 * In word unit, the byte order in a unit can be swapped (D1-D0 as a word) or not be
+	 * swapped (D0-D1 as a word). Therefore, if it is a swapped word unit, the write data
+	 * should be swapped before writing to flash.
+	 */
+	if (IS_DTR_SWAP16(xspi))
+		memcpy_toio_swapw(xspi->dirmap + from, buf, writebytes);
+	else
+		memcpy_toio(xspi->dirmap + from, buf, writebytes);
 
 	/* Request to push the pending data */
 	if (writebytes < MWRSIZE_MAX)
@@ -667,14 +743,23 @@ ssize_t xspi_dirmap_read(struct rpcif *xspi, u64 offs, size_t len, void *buf)
 
 	pm_runtime_get_sync(xspi->dev);
 
-	regmap_update_bits(xspi->regmap, XSPI_CMCFG0CS0,
-			XSPI_CMCFG0_FFMT(0x3) | XSPI_CMCFG0_ADDSIZE(0x3),
-			XSPI_CMCFG0_FFMT(0) | XSPI_CMCFG0_ADDSIZE(addsize));
-
-	regmap_update_bits(xspi->regmap, XSPI_CMCFG1CS0,
-			XSPI_CMCFG1_RDCMD(0xffff) | XSPI_CMCFG1_RDLATE(0x1f),
-			XSPI_CMCFG1_RDCMD_UPPER_BYTE(xspi->command) |
-			XSPI_CMCFG1_RDLATE(xspi->dummy));
+	if (xspi->proto == PROTO_8D_8D_8D) {
+		regmap_update_bits(xspi->regmap, XSPI_CMCFG0CS0,
+				XSPI_CMCFG0_FFMT(0x3) | XSPI_CMCFG0_ADDSIZE(0x3),
+				XSPI_CMCFG0_FFMT(1) | XSPI_CMCFG0_ADDSIZE(addsize));
+		regmap_update_bits(xspi->regmap, XSPI_CMCFG1CS0,
+				XSPI_CMCFG1_RDCMD(0xffff) | XSPI_CMCFG1_RDLATE(0x1f),
+				XSPI_CMCFG1_RDCMD(xspi->command) |
+				XSPI_CMCFG1_RDLATE(xspi->dummy));
+	} else {
+		regmap_update_bits(xspi->regmap, XSPI_CMCFG0CS0,
+				XSPI_CMCFG0_FFMT(0x3) | XSPI_CMCFG0_ADDSIZE(0x3),
+				XSPI_CMCFG0_FFMT(0) | XSPI_CMCFG0_ADDSIZE(addsize));
+		regmap_update_bits(xspi->regmap, XSPI_CMCFG1CS0,
+				XSPI_CMCFG1_RDCMD(0xffff) | XSPI_CMCFG1_RDLATE(0x1f),
+				XSPI_CMCFG1_RDCMD_UPPER_BYTE(xspi->command) |
+				XSPI_CMCFG1_RDLATE(xspi->dummy));
+	}
 
 	regmap_update_bits(xspi->regmap, XSPI_BMCTL0,
 			XSPI_BMCTL0_CS0ACC(0xff), XSPI_BMCTL0_CS0ACC(0x01));
@@ -688,7 +773,15 @@ ssize_t xspi_dirmap_read(struct rpcif *xspi, u64 offs, size_t len, void *buf)
 	regmap_update_bits(xspi->regmap, XSPI_LIOCFGCS0, XSPI_LIOCFG_PRTMD(0x3ff),
 			XSPI_LIOCFG_PRTMD(xspi->proto));
 
-	memcpy_fromio(buf, xspi->dirmap + from, len);
+	/* In DTR mode, data maybe read in word unit (2 bytes) instead of byte unit (1 byte).
+	 * In word unit, the byte order in a unit can be swapped (D1-D0 as a word) or not be
+	 * swapped (D0-D1 as a word). Therefore, if it is a swapped word unit, the read value
+	 * should be swapped again to get the correct value.
+	 */
+	if (IS_DTR_SWAP16(xspi))
+		memcpy_fromio_swapw(buf, xspi->dirmap + from, len);
+	else
+		memcpy_fromio(buf, xspi->dirmap + from, len);
 
 	pm_runtime_put(xspi->dev);
 

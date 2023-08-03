@@ -69,6 +69,7 @@ struct rpcif {
 	void __iomem *dirmap;
 	struct regmap *regmap;
 	struct reset_control *rstc;
+	struct spi_controller *ctlr;
 	const struct rpcif_ops *ops;
 	size_t size;
 	enum rpcif_type type;
