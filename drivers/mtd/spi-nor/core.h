@@ -28,6 +28,7 @@ enum spi_nor_option_flags {
 	SNOR_F_HAS_SR_BP3_BIT6  = BIT(13),
 	SNOR_F_IO_MODE_EN_VOLATILE = BIT(14),
 	SNOR_F_SOFT_RESET	= BIT(15),
+	SNOR_F_DTR_SWAB16	= BIT(16),
 };
 
 struct spi_nor_read_command {
