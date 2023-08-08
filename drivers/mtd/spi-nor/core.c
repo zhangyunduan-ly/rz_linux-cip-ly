@@ -3050,13 +3050,16 @@ static void spi_nor_init_flags(struct spi_nor *nor)
  */
 static void spi_nor_init_fixup_flags(struct spi_nor *nor)
 {
-	const u8 fixup_flags = nor->info->flags;
+	const u32 fixup_flags = nor->info->flags;
 
 	if (fixup_flags & SPI_NOR_4B_OPCODES)
 		nor->flags |= SNOR_F_4B_OPCODES;
 
 	if (fixup_flags & SPI_NOR_IO_MODE_EN_VOLATILE)
 		nor->flags |= SNOR_F_IO_MODE_EN_VOLATILE;
+
+	if (fixup_flags & SPI_NOR_SOFT_RESET)
+		nor->flags |= SNOR_F_SOFT_RESET;
 }
 
 /**
