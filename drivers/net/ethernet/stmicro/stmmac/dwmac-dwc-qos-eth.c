@@ -20,6 +20,7 @@
 #include <linux/platform_device.h>
 #include <linux/reset.h>
 #include <linux/stmmac.h>
+#include <linux/net/renesas/rzt2h-ethss.h>
 
 #include "stmmac_platform.h"
 #include "dwmac4.h"
@@ -35,6 +36,18 @@ struct tegra_eqos {
 	struct clk *clk_rx;
 
 	struct gpio_desc *reset;
+};
+
+struct renesas_rzt2h_eqos {
+	struct device *dev;
+	void __iomem *regs;
+
+	struct clk *clk;
+	struct reset_control *rst_h;
+	struct reset_control *rst_m;
+	struct gpio_desc *reset;
+
+	struct ethss_port *ethss_port;
 };
 
 static int dwc_eth_dwmac_config_dt(struct platform_device *pdev,
@@ -403,6 +416,213 @@ static int tegra_eqos_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static void renesas_rzt2h_eqos_fix_speed(void *priv, unsigned int speed)
+{
+	struct renesas_rzt2h_eqos *eqos = priv;
+
+	switch (speed) {
+	case SPEED_1000:
+		ethss_link_up(eqos->ethss_port, eqos->ethss_port->interface,
+			      SPEED_1000, DUPLEX_FULL);
+		break;
+	case SPEED_100:
+		ethss_link_up(eqos->ethss_port, eqos->ethss_port->interface,
+			      SPEED_100, DUPLEX_FULL);
+		break;
+	case SPEED_10:
+		ethss_link_up(eqos->ethss_port, eqos->ethss_port->interface,
+			      SPEED_10, DUPLEX_FULL);
+		break;
+	default:
+		dev_err(eqos->dev, "invalid speed %u\n", speed);
+		break;
+	}
+}
+
+static int renesas_rzt2h_eqos_init(struct platform_device *pdev, void *priv)
+{
+	struct renesas_rzt2h_eqos *eqos = priv;
+	unsigned long rate;
+	u32 value;
+
+	rate = clk_get_rate(eqos->clk);
+	value = (rate / 1000000) - 1;
+	writel(value, eqos->regs + GMAC_1US_TIC_COUNTER);
+
+	return 0;
+}
+
+static void *renesas_rzt2h_eqos_probe(struct platform_device *pdev,
+				      struct plat_stmmacenet_data *data,
+				      struct stmmac_resources *res)
+{
+	struct device *dev = &pdev->dev;
+	struct device_node *node = pdev->dev.of_node;
+	struct device_node *pcs_node;
+	struct renesas_rzt2h_eqos *eqos;
+	phy_interface_t interface;
+	int err;
+
+	eqos = devm_kzalloc(&pdev->dev, sizeof(*eqos), GFP_KERNEL);
+	if (!eqos) {
+		err = -ENOMEM;
+		goto error;
+	}
+
+	eqos->dev = &pdev->dev;
+	eqos->regs = res->addr;
+
+	if (!is_of_node(dev->fwnode))
+		goto bypass_clk_reset_gpio;
+
+	pcs_node = of_parse_phandle(node, "pcs-handle", 0);
+	if (!pcs_node) {
+		dev_err(eqos->dev, "Failed to get pcs-handle\n");
+		goto error;
+	}
+
+	eqos->ethss_port = ethss_create(eqos->dev, pcs_node);
+	if (IS_ERR(eqos->ethss_port)) {
+		dev_err(eqos->dev, "Failed to create PCS for ETHSS\n");
+		goto error;
+	}
+
+	err = of_get_phy_mode(dev->of_node, &interface);
+	if (err < 0) {
+		dev_err(eqos->dev, "Failed to get phy mode\n");
+		goto ethss;
+	}
+
+	err = ethss_config(eqos->ethss_port, interface);
+	if (err < 0) {
+		dev_err(&pdev->dev, "Failed to config ethss\n");
+		goto ethss;
+	}
+
+	dev_dbg(&pdev->dev, "Config ETHSS port = %d , mode = %s for GMAC OK\n",
+		eqos->ethss_port->port, phy_modes(eqos->ethss_port->interface));
+
+	eqos->reset = devm_gpiod_get(&pdev->dev, "phy-reset", GPIOD_OUT_HIGH);
+	if (IS_ERR(eqos->reset)) {
+		err = PTR_ERR(eqos->reset);
+		goto ethss;
+	}
+	gpiod_set_value(eqos->reset, 1);
+
+	eqos->clk = devm_clk_get(&pdev->dev, "clk");
+	if (IS_ERR(eqos->clk)) {
+		err = PTR_ERR(eqos->clk);
+		goto reset_gpio;
+	}
+
+	err = clk_prepare_enable(eqos->clk);
+	if (err < 0)
+		goto reset_gpio;
+
+	dev_dbg(&pdev->dev, "Enabled clk\n");
+
+	data->stmmac_clk = eqos->clk;
+
+	/* MDIO bus was already reset just above */
+	data->mdio_bus_data->needs_reset = false;
+
+	eqos->rst_h = devm_reset_control_get(&pdev->dev, "reset_h");
+	if (IS_ERR(eqos->rst_h)) {
+		err = PTR_ERR(eqos->rst_h);
+		goto reset_h;
+	}
+
+	err = reset_control_deassert(eqos->rst_h);
+	if (err < 0)
+		goto reset_h;
+
+	dev_dbg(&pdev->dev, "Deassert reset_h control OK\n");
+
+	eqos->rst_m = devm_reset_control_get(&pdev->dev, "reset_m");
+	if (IS_ERR(eqos->rst_m)) {
+		err = PTR_ERR(eqos->rst_m);
+		goto reset;
+	}
+
+	err = reset_control_deassert(eqos->rst_m);
+	if (err < 0)
+		goto reset;
+
+	dev_dbg(&pdev->dev, "Deassert reset_m control OK\n");
+
+	/* Get IRQ information early to have an ability to ask for deferred
+	 * probe if needed before we went too far with resource allocation.
+	 */
+	res->irq = platform_get_irq_byname(pdev, "macirq");
+	if (res->irq < 0)
+		goto reset;
+
+	dev_dbg(&pdev->dev, "Get macirq OK\n");
+	/* On some platforms e.g. SPEAr the wake up irq differs from the mac irq
+	 * The external wake up irq can be passed through the platform code
+	 * named as "eth_wake_irq"
+	 *
+	 * In case the wake up interrupt is not passed from the platform
+	 * so the driver will continue to use the mac irq (ndev->irq)
+	 */
+	res->wol_irq = platform_get_irq_byname_optional(pdev, "eth_wake_irq");
+	if (res->wol_irq < 0) {
+		if (res->wol_irq == -EPROBE_DEFER)
+			goto bypass_clk_reset_gpio;
+		dev_dbg(&pdev->dev, "IRQ eth_wake_irq not found\n");
+		res->wol_irq = res->irq;
+	}
+
+	dev_dbg(&pdev->dev, "Get eth_wake_irq OK\n");
+
+	res->lpi_irq = platform_get_irq_byname_optional(pdev, "eth_lpi");
+	if (res->lpi_irq < 0) {
+		if (res->lpi_irq == -EPROBE_DEFER)
+			goto bypass_clk_reset_gpio;
+		dev_dbg(&pdev->dev, "IRQ eth_lpi not found\n");
+	}
+
+	dev_dbg(&pdev->dev, "Get eth_lpi OK\n");
+
+bypass_clk_reset_gpio:
+	data->init = renesas_rzt2h_eqos_init;
+	data->fix_mac_speed = renesas_rzt2h_eqos_fix_speed;
+	data->interface = interface;
+	data->bsp_priv = eqos;
+	data->sph_disable = 1;
+
+	err = renesas_rzt2h_eqos_init(pdev, eqos);
+	if (err < 0)
+		goto reset;
+
+out:
+	return eqos;
+reset:
+	reset_control_assert(eqos->rst_h);
+reset_h:
+	clk_disable_unprepare(eqos->clk);
+reset_gpio:
+	gpiod_set_value(eqos->reset, 0);
+ethss:
+	ethss_destroy(eqos->ethss_port);
+error:
+	eqos = ERR_PTR(err);
+	goto out;
+}
+
+static int renesas_rzt2h_eqos_remove(struct platform_device *pdev)
+{
+	struct renesas_rzt2h_eqos *eqos = get_stmmac_bsp_priv(&pdev->dev);
+
+	ethss_destroy(eqos->ethss_port);
+	gpiod_set_value(eqos->reset, 0);
+	clk_disable_unprepare(eqos->clk);
+	reset_control_assert(eqos->rst_h);
+	reset_control_assert(eqos->rst_m);
+
+	return 0;
+}
+
 struct dwc_eth_dwmac_data {
 	void *(*probe)(struct platform_device *pdev,
 		       struct plat_stmmacenet_data *data,
@@ -418,6 +638,11 @@ static const struct dwc_eth_dwmac_data dwc_qos_data = {
 static const struct dwc_eth_dwmac_data tegra_eqos_data = {
 	.probe = tegra_eqos_probe,
 	.remove = tegra_eqos_remove,
+};
+
+static const struct dwc_eth_dwmac_data renesas_rzt2h_eqos_data = {
+	.probe = renesas_rzt2h_eqos_probe,
+	.remove = renesas_rzt2h_eqos_remove,
 };
 
 static int dwc_eth_dwmac_probe(struct platform_device *pdev)
@@ -503,6 +728,7 @@ static int dwc_eth_dwmac_remove(struct platform_device *pdev)
 static const struct of_device_id dwc_eth_dwmac_match[] = {
 	{ .compatible = "snps,dwc-qos-ethernet-4.10", .data = &dwc_qos_data },
 	{ .compatible = "nvidia,tegra186-eqos", .data = &tegra_eqos_data },
+	{ .compatible = "renesas,rzt2h-eqos", .data = &renesas_rzt2h_eqos_data },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, dwc_eth_dwmac_match);
