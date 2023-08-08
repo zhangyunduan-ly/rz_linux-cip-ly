@@ -2968,6 +2968,9 @@ static void spi_nor_info_init_params(struct spi_nor *nor)
 					SPINOR_OP_PP, SNOR_PROTO_8_8_8_DTR);
 	}
 
+	if (info->flags & SPI_NOR_DTR_SWAB16)
+		nor->flags |= SNOR_F_DTR_SWAB16;
+
 	/*
 	 * Sector Erase settings. Sort Erase Types in ascending order, with the
 	 * smallest erase size starting at BIT(0).

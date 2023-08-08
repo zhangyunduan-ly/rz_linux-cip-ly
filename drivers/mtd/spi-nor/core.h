@@ -333,6 +333,9 @@ struct flash_info {
 						 * available I/O mode via a
 						 * volatile bit.
 						 */
+#define SPI_NOR_DTR_SWAB16	BIT(22) /* the byte order of 16-bit words is swapped when
+					   read or written in Octal DTR mode compared to STR
+					   mode. */
 
 	/* Part specific fixup hooks. */
 	const struct spi_nor_fixups *fixups;
