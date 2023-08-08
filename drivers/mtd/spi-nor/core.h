@@ -336,6 +336,7 @@ struct flash_info {
 #define SPI_NOR_DTR_SWAB16	BIT(22) /* the byte order of 16-bit words is swapped when
 					   read or written in Octal DTR mode compared to STR
 					   mode. */
+#define SPI_NOR_SOFT_RESET	BIT(23) /* flash supports software reset enable, reset sequence. */
 
 	/* Part specific fixup hooks. */
 	const struct spi_nor_fixups *fixups;
