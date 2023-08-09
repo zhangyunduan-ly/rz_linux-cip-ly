@@ -211,6 +211,10 @@ config CLK_RZG2L
 	bool "Renesas RZ/{G2L,G2UL,V2L} family clock support" if COMPILE_TEST
 	select RESET_CONTROLLER
 
+config CLK_RZT2
+	bool "Renesas RZ/{T2H,N2H} family clock support" if COMPILE_TEST
+	select RESET_CONTROLLER
+
 # Generic
 config CLK_RENESAS_CPG_MSSR
 	bool "CPG/MSSR clock support" if COMPILE_TEST
