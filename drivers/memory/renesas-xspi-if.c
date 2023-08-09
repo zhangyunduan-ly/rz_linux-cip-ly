@@ -17,6 +17,7 @@
 #include <linux/reset.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spi-mem.h>
+#include <linux/mtd/spi-nor.h>
 
 #include <memory/renesas-rpc-if.h>
 #include <memory/renesas-xspi-if.h>
@@ -514,6 +515,10 @@ int xspi_manual_xfer(struct rpcif *xspi)
 			XSPI_CDTBUF_ADDSIZE(xspi->addr_nbytes));
 
 	regmap_write(xspi->regmap, XSPI_CDABUF0, xspi->smadr);
+
+	/* WA: Fixed 1S-1S-1S Protocol mode for Erase if Protocol mode is 1S-4S-4S */
+	if (xspi->command == SPINOR_OP_BE_4K && xspi->proto == PROTO_1S_4S_4S)
+		xspi->proto = 0;
 
 	regmap_update_bits(xspi->regmap, XSPI_LIOCFGCS0, XSPI_LIOCFG_PRTMD(0x3ff),
 			XSPI_LIOCFG_PRTMD(xspi->proto));
