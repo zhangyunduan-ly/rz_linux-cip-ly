@@ -8,6 +8,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/delay.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/sys_soc.h>
@@ -304,90 +305,186 @@ static void rcar_du_crtc_set_display_timing(struct rcar_du_crtc *rcrtc)
 
 	if (rcar_du_has(rcdu, RCAR_DU_FEATURE_RZG2L)) {
 		u32 ditr0, ditr1, ditr2, ditr3, ditr4, ditr5, pbcr0;
-		void __iomem *cpg_base = ioremap(0x11010000, 0x1000);
+		void __iomem *cpg_base = NULL;
 		u32 i, index, prevIndex = 0;
 		u32 parallelOut;
 		u32 tableMax;
-		struct cpg_param *paramPtr;
 
-		if (of_machine_is_compatible("renesas,r9a07g043")) {
-			parallelOut = 1;
-			tableMax = TABLE_PARALLEL_MAX;
-			paramPtr = resolution_param_parallel;
-		} else {
-			int lanes;
-			struct rcar_du_crtc_state *rstate = to_rcar_crtc_state(rcrtc->crtc.state);
+                if (of_machine_is_compatible("renesas,r9a09g077")) {
+			long long div, res, mult;
+			unsigned int pll_s, pll_m, pll_p, csdiv;
+			short pll_k;
+			unsigned long vclk = mode->clock;
+			unsigned int timeout = 10;
 
-			lanes = (rstate->outputs != BIT(RCAR_DU_OUTPUT_MIPI_DSI0)) ? 4:
-				 rzg2l_mipi_dsi_get_data_lanes(rcdu->dsi[rcrtc->index]);
+find_div:
+			for (csdiv = 2; csdiv <= 32; csdiv = csdiv + 2) {
+				for (pll_p = 2; pll_p <= 8; pll_p += 2) {
+					for (pll_s = 0; pll_s <= 6; pll_s++) {
+						mult = vclk * csdiv *
+						       (pll_p << pll_s);
 
-			parallelOut = 0;
-			switch (lanes) {
-			case 2:
-				paramPtr = resolution_2_lanes_param;
-				tableMax = TABLE_MAX - 1;
-				break;
-			case 3:
-				paramPtr = resolution_3_lanes_param;
-				tableMax = TABLE_MAX;
-				break;
-			case 4:
-				paramPtr = resolution_4_lanes_param;
-				tableMax = TABLE_MAX;
-				break;
-			default:
+						div = mult / 24000;
+						if ((div < 64) || (div > 533))
+							continue;
+
+						res = mult % 24000;
+						if (res >= 12000) {
+							pll_m = div + 1;
+							pll_k = (res - 24000) * 65536 / 24000;
+							if (!(((res - 24000) * 65536) % 24000))
+								goto found;
+						} else {
+							pll_m = div;
+							pll_k = res * 65536 / 24000;
+							if (!((res * 65536) % 24000))
+								goto found;
+						}
+					}
+				}
+			}
+
+			dev_info(rcrtc->dev->dev,
+				 "Not found pll setting for %lu (kHz)\n",
+				 vclk);
+
+			/* Round vclk to the nearest freq multiple of 25KHz */
+			if ((vclk % 25) >= 10)
+				vclk = ((vclk / 25) + 1) * 25;
+			else
+				vclk = (vclk / 25) * 25;
+
+			dev_dbg(rcrtc->dev->dev,
+				 "Recalculate with nearest vclk %lu (kHz)\n",
+				 vclk);
+
+			goto find_div;
+found:
+			csdiv = (csdiv / 2) - 1;
+			
+			dev_dbg(rcrtc->dev->dev,
+				 "vclk:%lu, pll_k: %hd, pll_m: %d, pll_p: %d, pll_s: %d, csdiv: %d\n",
+				 vclk, pll_k, pll_m, pll_p, pll_s, csdiv);
+
+			cpg_base = ioremap(0x80280000, 0x1000);
+
+			/* SCKCR3: LCDCDIVSEL */
+			reg_write(cpg_base + 0x8, (csdiv << 20) |
+				 (ioread32(cpg_base + 0x8) & ~GENMASK(23, 20)));
+
+			iounmap(cpg_base);
+
+			cpg_base = ioremap(0x81280000, 0x100);
+
+			/* PLL3EN: PLL3EN = 0 */
+			reg_write(cpg_base + 0xC0, 0);
+
+			/* PLL3_VCO_CTR0: PLL3M and PLL3P */
+			reg_write(cpg_base + 0xC4, (pll_p << 16) | pll_m);
+
+			/* PLL3_VCO_CTR0: PLL3K and PLL3S */
+			reg_write(cpg_base + 0xC8, (pll_k << 16) | pll_s);
+
+			/* PLL3EN: PLL3EN = 1 */
+			reg_write(cpg_base + 0xC0, BIT(0));
+
+			/* Wait for PLL3 locked and go to normal mode */
+			while (timeout) {
+				if (ioread32(cpg_base + 0xB0) & BIT(0))
+					break;
+				udelay(100);
+				timeout--;
+			}
+
+			if (!timeout) {
+				dev_err(rcrtc->dev->dev,
+					"PLL3 is not in normal mode\n");
+				iounmap(cpg_base);
 				return;
 			}
+		} else {
+			struct cpg_param *paramPtr;
+			cpg_base = ioremap(0x11010000, 0x1000);
 
-			/* CPG_OTHERFUNC1_REG: SEL_PLL5_3 clock */
-			reg_write(cpg_base + 0xbe8, 0x10001);
-		}
+			if (of_machine_is_compatible("renesas,r9a07g043")) {
+				parallelOut = 1;
+				tableMax = TABLE_PARALLEL_MAX;
+				paramPtr = resolution_param_parallel;
+			} else {
+				int lanes;
+				struct rcar_du_crtc_state *rstate = to_rcar_crtc_state(rcrtc->crtc.state);
 
-		for (i = 0; i < tableMax; i++) {
-			if (paramPtr[i].frequency == mode->clock) {
-				index = i;
-				break;
+				lanes = (rstate->outputs != BIT(RCAR_DU_OUTPUT_MIPI_DSI0)) ? 4:
+					 rzg2l_mipi_dsi_get_data_lanes(rcdu->dsi[rcrtc->index]);
+
+				parallelOut = 0;
+				switch (lanes) {
+				case 2:
+					paramPtr = resolution_2_lanes_param;
+					tableMax = TABLE_MAX - 1;
+					break;
+				case 3:
+					paramPtr = resolution_3_lanes_param;
+					tableMax = TABLE_MAX;
+					break;
+				case 4:
+					paramPtr = resolution_4_lanes_param;
+					tableMax = TABLE_MAX;
+					break;
+				default:
+					return;
+				}
+
+				/* CPG_OTHERFUNC1_REG: SEL_PLL5_3 clock */
+				reg_write(cpg_base + 0xbe8, 0x10001);
 			}
 
-			if (paramPtr[i].frequency > mode->clock) {
-				if ((paramPtr[i].frequency - mode->clock) >
-				(mode->clock - paramPtr[prevIndex].frequency))
-					index = prevIndex;
-				else
+			for (i = 0; i < tableMax; i++) {
+				if (paramPtr[i].frequency == mode->clock) {
 					index = i;
-				break;
+					break;
+				}
+
+				if (paramPtr[i].frequency > mode->clock) {
+					if ((paramPtr[i].frequency - mode->clock) >
+					(mode->clock - paramPtr[prevIndex].frequency))
+						index = prevIndex;
+					else
+						index = i;
+					break;
+				}
+				prevIndex = i;
 			}
-			prevIndex = i;
+
+			if (i == tableMax)
+				index = tableMax - 1;
+
+			/* CPG_PL2_DDIV: DIV_DSI_LPCLK */
+			reg_write(cpg_base + 0x0204, 0x10000000 |
+				 (CPG_LPCLK_DIV << 12));
+			/* CPG_PL5_SDIV: DIV_DSI_A, DIV_DSI_B */
+			reg_write(cpg_base + 0x0420, 0x01010000 |
+				 (paramPtr[index].dsi_div_a << 0) |
+				 (paramPtr[index].dsi_div_b << 8));
+			/* CPG_PLL5_CLK1: POSTDIV1, POSTDIV2, REFDIV */
+			reg_write(cpg_base + 0x0144, 0x01110000 |
+				 (paramPtr[index].pl5_postdiv1 << 0) |
+				 (paramPtr[index].pl5_postdiv2 << 4) |
+				 (paramPtr[index].pl5_refdiv << 8));
+			/* CPG_PLL5_CLK3: DIVVAL=6, FRACIN */
+			reg_write(cpg_base + 0x014C,
+				 (paramPtr[index].pl5_divval << 0) |
+				 (paramPtr[index].pl5_fracin << 8));
+			/* CPG_PLL5_CLK4: INTIN */
+			reg_write(cpg_base + 0x0150, 0x000000ff |
+				 (paramPtr[index].pl5_intin << 16));
+			/* CPG_PLL5_CLK5: SPREAD */
+			reg_write(cpg_base + 0x0154,
+				 (paramPtr[index].pl5_spread << 0));
+
+			/* CPG_PLL5_STBY: RESETB=1 */
+			reg_write(cpg_base + 0x0140, 0x00150001);
 		}
-
-		if (i == tableMax)
-			index = tableMax - 1;
-
-		/* CPG_PL2_DDIV: DIV_DSI_LPCLK */
-		reg_write(cpg_base + 0x0204, 0x10000000 |
-			 (CPG_LPCLK_DIV << 12));
-		/* CPG_PL5_SDIV: DIV_DSI_A, DIV_DSI_B */
-		reg_write(cpg_base + 0x0420, 0x01010000 |
-			 (paramPtr[index].dsi_div_a << 0) |
-			 (paramPtr[index].dsi_div_b << 8));
-		/* CPG_PLL5_CLK1: POSTDIV1, POSTDIV2, REFDIV */
-		reg_write(cpg_base + 0x0144, 0x01110000 |
-			 (paramPtr[index].pl5_postdiv1 << 0) |
-			 (paramPtr[index].pl5_postdiv2 << 4) |
-			 (paramPtr[index].pl5_refdiv << 8));
-		/* CPG_PLL5_CLK3: DIVVAL=6, FRACIN */
-		reg_write(cpg_base + 0x014C,
-			 (paramPtr[index].pl5_divval << 0) |
-			 (paramPtr[index].pl5_fracin << 8));
-		/* CPG_PLL5_CLK4: INTIN */
-		reg_write(cpg_base + 0x0150, 0x000000ff |
-			 (paramPtr[index].pl5_intin << 16));
-		/* CPG_PLL5_CLK5: SPREAD */
-		reg_write(cpg_base + 0x0154,
-			 (paramPtr[index].pl5_spread << 0));
-
-		/* CPG_PLL5_STBY: RESETB=1 */
-		reg_write(cpg_base + 0x0140, 0x00150001);
 
 		iounmap(cpg_base);
 
@@ -1483,7 +1580,7 @@ int rcar_du_crtc_create(struct rcar_du_group *rgrp, unsigned int swindex,
 	int ret;
 
 	if (rcar_du_has(rcdu, RCAR_DU_FEATURE_RZG2L)) {
-		rcrtc->rstc = devm_reset_control_get(rcdu->dev, NULL);
+		rcrtc->rstc = devm_reset_control_get_optional(rcdu->dev, NULL);
 		if (IS_ERR(rcrtc->rstc)) {
 			dev_err(rcdu->dev, "can't get cpg reset\n");
 			return PTR_ERR(rcrtc->rstc);
