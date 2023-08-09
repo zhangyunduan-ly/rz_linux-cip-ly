@@ -341,6 +341,14 @@ properties:
               - renesas,r9a07g054l2 # Dual Cortex-A55 RZ/V2L
           - const: renesas,r9a07g054
 
+      - description: RZ/T2H (R9A09G077)
+        items:
+          - enum:
+              - renesas,r9a09g077m44-dev # Dev Board
+          - enum:
+              - renesas,r9a09g077m4 # Quad Cortex-A55 RZ/T2H
+          - const: renesas,r9a09g077
+
 additionalProperties: true
 
 ...
