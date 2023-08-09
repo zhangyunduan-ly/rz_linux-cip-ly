@@ -23,7 +23,7 @@
 enum clk_ids {
 	/* Core Clock Outputs exported to DT */
 	/* External Input Clocks */
-	LAST_DT_CORE_CLK = R9A09G077_ETCLKE,
+	LAST_DT_CORE_CLK = R9A09G077_LCDC_CLKD,
 	CLK_EXTAL,
 	CLK_LOCO,
 
@@ -63,6 +63,26 @@ static const struct clk_div_table dtable_24_32[] = {
 	{0, 0},
 };
 
+static const struct clk_div_table dtable_2_32[] = {
+	{0, 2},
+	{1, 4},
+	{2, 6},
+	{3, 8},
+	{4, 10},
+	{5, 12},
+	{6, 14},
+	{7, 16},
+	{8, 18},
+	{9, 20},
+	{10, 22},
+	{11, 24},
+	{12, 26},
+	{13, 28},
+	{14, 30},
+	{15, 32},
+	{0, 0},
+};
+
 /* Mux clock tables */
 static const char * const sel_eth_phy[] = { ".pll1_eth_phy", ".osc_eth_phy" };
 static const char * const sel_clk_src[] = { ".sel_loco", ".sel_extal" };
@@ -72,7 +92,7 @@ static const char * const sel_clk_pll2[] = { ".sel_loco", ".sel_pll2" };
 static const char * const sel_clk_pll4[] = { ".sel_loco", ".sel_pll4" };
 
 static const struct {
-	struct cpg_core_clk common[42];
+	struct cpg_core_clk common[45];
 } core_clks __initconst = {
 	.common = {
 		/* External Clock Inputs */
@@ -134,11 +154,17 @@ static const struct {
 		DEF_FIXED("ETCLKC", R9A09G077_ETCLKC, CLK_SEL_CLK_PLL1, 1, 10),
 		DEF_FIXED("ETCLKD", R9A09G077_ETCLKD, CLK_SEL_CLK_PLL1, 1, 20),
 		DEF_FIXED("ETCLKE", R9A09G077_ETCLKE, CLK_SEL_CLK_PLL1, 1, 40),
+		DEF_FIXED("LCDC_CLKA", R9A09G077_LCDC_CLKA, R9A09G077_PCLKAH,
+			  1, 1),
+		DEF_FIXED("LCDC_CLKP", R9A09G077_LCDC_CLKP, R9A09G077_PCLKAL,
+			  1, 1),
+		DEF_DIV("LCDC_CLKD", R9A09G077_LCDC_CLKD, CLK_PLL3, DIVLCDC,
+			dtable_2_32, 0, 0),
 	},
 };
 
 static const struct {
-	struct rzt2_mod_clk common[50];
+	struct rzt2_mod_clk common[51];
 } mod_clks = {
 	.common = {
 		DEF_MOD("sci0",         R9A09G077_SCI0_CLK, R9A09G077_PCLKM,
@@ -151,6 +177,8 @@ static const struct {
 					0x334, 4, 1),
 		DEF_MOD("ca553",	R9A09G077_CA55_CORE3_CLK, R9A09G077_CA55C3,
 					0x334, 5, 1),
+		DEF_MOD("lcdc",		R9A09G077_LCDC_CLK, R9A09G077_LCDC_CLKD,
+					0x330, 4, 0),
 		DEF_MOD("pcie",		R9A09G077_PCIE_CLK, R9A09G077_PCLKAH,
 					0X330, 8, 0),
 		DEF_MOD("usb",		R9A09G077_USB_CLK, R9A09G077_USB,
@@ -291,7 +319,7 @@ const struct rzt2_cpg_info r9a09g077_cpg_info = {
 	/* Module Clocks */
 	.mod_clks = mod_clks.common,
 	.num_mod_clks = ARRAY_SIZE(mod_clks.common),
-	.num_hw_mod_clks = R9A09G077_RTC_CLK + 1,
+	.num_hw_mod_clks = R9A09G077_LCDC_CLK + 1,
 
 	/* Resets */
 	.resets = r9a09g077_resets,
