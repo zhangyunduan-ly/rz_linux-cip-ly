@@ -166,7 +166,7 @@ static unsigned long rzt2h_cpg_pll_clk_recalc_rate(struct clk_hw *hw,
 
 	val1 = readl(priv->cpg_base1 + GET_REG_SAMPLL_CLK1(pll_clk->conf));
 	val2 = readl(priv->cpg_base1 + GET_REG_SAMPLL_CLK2(pll_clk->conf));
-	mult = MDIV(val1) + KDIV(val1) / 65536;
+	mult = MDIV(val1) + KDIV(val2) / 65536;
 	div = PDIV(val1) << SDIV(val2);
 
 	return DIV_ROUND_CLOSEST_ULL((u64)parent_rate * mult, div);
