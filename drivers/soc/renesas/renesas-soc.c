@@ -69,6 +69,10 @@ static const struct renesas_family fam_rzv2l __initconst __maybe_unused = {
 	.name	= "RZ/V2L",
 };
 
+static const struct renesas_family fam_rzt2h __initconst __maybe_unused = {
+	.name	= "RZ/T2H",
+};
+
 static const struct renesas_family fam_rzfive __initconst __maybe_unused = {
 	.name	= "RZ/Five",
 };
@@ -161,6 +165,10 @@ static const struct renesas_soc soc_rz_g2ul __initconst __maybe_unused = {
 static const struct renesas_soc soc_rz_v2l __initconst __maybe_unused = {
 	.family = &fam_rzv2l,
 	.id     = 0x8447447,
+};
+
+static const struct renesas_soc soc_rz_t2h __initconst __maybe_unused = {
+	.family = &fam_rzt2h,
 };
 
 static const struct renesas_soc soc_rz_five __initconst __maybe_unused = {
@@ -350,6 +358,9 @@ static const struct of_device_id renesas_socs[] __initconst = {
 #endif
 #if defined(CONFIG_ARCH_R9A07G054)
 	{ .compatible = "renesas,r9a07g054",	.data = &soc_rz_v2l },
+#endif
+#if defined(CONFIG_ARCH_R9A09G077)
+	{ .compatible = "renesas,r9a09g077",	.data = &soc_rz_t2h },
 #endif
 #ifdef CONFIG_ARCH_SH73A0
 	{ .compatible = "renesas,sh73a0",	.data = &soc_shmobile_ag5 },
