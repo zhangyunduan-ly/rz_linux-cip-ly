@@ -22,6 +22,7 @@
 		i2c0 = &i2c0;
 		i2c1 = &i2c1;
 		i2c2 = &i2c2;
+		ethernet0 = &gmac1;
 	};
 
 	chosen {
@@ -167,6 +168,11 @@
 			<RZT2H_PORT_PINMUX(31, 6, 0x1A)>, /* MOSI */
 			<RZT2H_PORT_PINMUX(31, 7, 0x1A)>; /* MISO */
 	};
+
+	mdio1_pins: gmac_mdio1 {
+		pinmux = <RZT2H_PORT_PINMUX(26, 1, 0x10)>,      /* MDIO1_MDC */
+			 <RZT2H_PORT_PINMUX(26, 2, 0x10)>;      /* MDIO1_MDIO */
+	};
 };
 
 &extal {
@@ -244,4 +250,24 @@
 &wdt5 {
 	status = "okay";
 	timeout-sec = <60>;
+};
+
+&gmac1 {
+	phy-handle = <&phy3>;
+	phy-mode = "mii";
+	max-speed = <100>;
+	status = "okay";
+	phy-reset-gpios = <&pinctrl RZT2H_GPIO(32, 3) GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&mdio1_pins>;
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		phy3: ethernet-phy@3 {
+			compatible = "ethernet-phy-id0007.0772";
+			phy-mode = "mii";
+			reg = <3>;
+		};
+	};
 };
