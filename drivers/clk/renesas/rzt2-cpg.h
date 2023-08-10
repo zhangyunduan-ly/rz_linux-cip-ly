@@ -34,6 +34,8 @@
 #define PLL3_VCO_CTR0			0xC4
 #define PLL3_VCO_CTR1			0xC8
 #define PLL4MON				0xD0
+#define PHYSEL				BIT(21)
+
 
 #define MRCTLA			0x240
 #define MRCTLE			0x250

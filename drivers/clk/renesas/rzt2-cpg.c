@@ -753,6 +753,7 @@ static int __init rzt2_cpg_probe(struct platform_device *pdev)
 	writel(PLL0EN, priv->cpg_base1 + PLL0EN_REG);
 	writel(PLL2EN, priv->cpg_base1 + PLL2EN_REG);
 	writel(PLL3EN, priv->cpg_base1 + PLL3EN_REG);
+	writel(readl(priv->cpg_base0 + SCKCR) & ~PHYSEL, priv->cpg_base0 + SCKCR);
 
 	error = of_clk_add_provider(np, rzt2_cpg_clk_src_twocell_get, priv);
 	if (error)
