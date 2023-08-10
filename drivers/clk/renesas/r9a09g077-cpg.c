@@ -85,6 +85,7 @@ static const struct clk_div_table dtable_2_32[] = {
 
 /* Mux clock tables */
 static const char * const sel_eth_phy[] = { ".pll1_eth_phy", ".osc_eth_phy" };
+static const char * const eth_refclk[] = {".eth_clk_e", ".eth_clk_extal"};
 static const char * const sel_clk_src[] = { ".sel_loco", ".sel_extal" };
 static const char * const sel_clk_pll0[] = { ".sel_loco", ".sel_pll0" };
 static const char * const sel_clk_pll1[] = { ".sel_loco", ".sel_pll1" };
@@ -92,7 +93,7 @@ static const char * const sel_clk_pll2[] = { ".sel_loco", ".sel_pll2" };
 static const char * const sel_clk_pll4[] = { ".sel_loco", ".sel_pll4" };
 
 static const struct {
-	struct cpg_core_clk common[45];
+	struct cpg_core_clk common[48];
 } core_clks __initconst = {
 	.common = {
 		/* External Clock Inputs */
@@ -154,6 +155,10 @@ static const struct {
 		DEF_FIXED("ETCLKC", R9A09G077_ETCLKC, CLK_SEL_CLK_PLL1, 1, 10),
 		DEF_FIXED("ETCLKD", R9A09G077_ETCLKD, CLK_SEL_CLK_PLL1, 1, 20),
 		DEF_FIXED("ETCLKE", R9A09G077_ETCLKE, CLK_SEL_CLK_PLL1, 1, 40),
+		DEF_FIXED(".eth_clk_e", R9A09G077_ETHCLKE, R9A09G077_ETCLKE, 1, 1),
+		DEF_FIXED(".eth_clk_extal", R9A09G077_ETHCLK_EXTAL, CLK_EXTAL, 1, 1),
+		DEF_MUX(".eth_refclk", R9A09G077_ETH_REFCLK, DIVETHPHY,
+				eth_refclk, ARRAY_SIZE(eth_refclk), 0, 0),
 		DEF_FIXED("LCDC_CLKA", R9A09G077_LCDC_CLKA, R9A09G077_PCLKAH,
 			  1, 1),
 		DEF_FIXED("LCDC_CLKP", R9A09G077_LCDC_CLKP, R9A09G077_PCLKAL,
