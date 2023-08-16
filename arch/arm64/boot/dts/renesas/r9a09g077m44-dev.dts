@@ -9,6 +9,7 @@
 #include "r9a09g077.dtsi"
 #include <dt-bindings/pinctrl/rzt2h-pinctrl.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/net/rzt2h-ethss.h>
 
 / {
 	model = "Renesas Development EVK based on r9a09g077m44";
@@ -173,6 +174,32 @@
 		pinmux = <RZT2H_PORT_PINMUX(26, 1, 0x10)>,      /* MDIO1_MDC */
 			 <RZT2H_PORT_PINMUX(26, 2, 0x10)>;      /* MDIO1_MDIO */
 	};
+
+	pins_refclk: pins_refclk {
+		pinmux = <RZT2H_PORT_PINMUX(21, 7, 0x02)>,	/* ETH0_REFCLK */
+			 <RZT2H_PORT_PINMUX(26, 4, 0x02)>,	/* ETH1_REFCLK */
+			 <RZT2H_PORT_PINMUX(31, 0, 0x02)>,	/* ETH2_REFCLK */
+			 <RZT2H_PORT_PINMUX(34, 6, 0x02)>;	/* ETH3_REFCLK */
+	};
+
+	eth3_pins: ethss_3 {
+		pinmux = <RZT2H_PORT_PINMUX(33, 2, 0x0F)>,	/* ETH3_TXCLK */
+			 <RZT2H_PORT_PINMUX(33, 3, 0x0F)>,	/* ETH3_TXD[0] */
+			 <RZT2H_PORT_PINMUX(33, 4, 0x0F)>,	/* ETH3_TXD[1] */
+			 <RZT2H_PORT_PINMUX(33, 5, 0x0F)>,	/* ETH3_TXD[2] */
+			 <RZT2H_PORT_PINMUX(33, 6, 0x0F)>,	/* ETH3_TXD[3] */
+			 <RZT2H_PORT_PINMUX(33, 7, 0x0F)>,	/* ETH3_TXEN */
+			 <RZT2H_PORT_PINMUX(34, 0, 0x0F)>,	/* ETH3_RXCLK */
+			 <RZT2H_PORT_PINMUX(34, 1, 0x0F)>,	/* ETH3_RXD[0] */
+			 <RZT2H_PORT_PINMUX(34, 2, 0x0F)>,	/* ETH3_RXD[1] */
+			 <RZT2H_PORT_PINMUX(34, 3, 0x0F)>,	/* ETH3_RXD[2] */
+			 <RZT2H_PORT_PINMUX(34, 4, 0x0F)>,	/* ETH3_RXD[3] */
+			 <RZT2H_PORT_PINMUX(34, 5, 0x0F)>,	/* ETH3_RXDV */
+			 <RZT2H_PORT_PINMUX(34, 7, 0x0F)>,	/* ETH3_TXER */
+			 <RZT2H_PORT_PINMUX(35, 0, 0x0F)>,	/* ETH3_RXER */
+			 <RZT2H_PORT_PINMUX(35, 1, 0x0F)>,	/* ETH3_CRS */
+			 <RZT2H_PORT_PINMUX(35, 2, 0x0F)>;	/* ETH3_COL */
+	};
 };
 
 &extal {
@@ -256,6 +283,7 @@
 	phy-handle = <&phy3>;
 	phy-mode = "mii";
 	max-speed = <100>;
+	pcs-handle = <&mii_conv3>;
 	status = "okay";
 	phy-reset-gpios = <&pinctrl RZT2H_GPIO(32, 3) GPIO_ACTIVE_HIGH>;
 	pinctrl-names = "default";
@@ -270,4 +298,31 @@
 			reg = <3>;
 		};
 	};
+};
+
+&ethss {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_refclk>, <&eth3_pins>;
+	renesas,ethss-switch-portmanagement = <ETHSS_GMAC0_PORT>;
+};
+
+&mii_conv0 {
+	renesas,ethss-port = <ETHSS_SWITCH_PORT0>;
+	status = "okay";
+};
+
+&mii_conv1 {
+	renesas,ethss-port = <ETHSS_SWITCH_PORT1>;
+	status = "okay";
+};
+
+&mii_conv2 {
+	renesas,ethss-port = <ETHSS_SWITCH_PORT2>;
+	status = "okay";
+};
+
+&mii_conv3 {
+	renesas,ethss-port = <ETHSS_GMAC1_PORT>;
+	status = "okay";
 };
