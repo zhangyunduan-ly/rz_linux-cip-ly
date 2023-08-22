@@ -24,6 +24,7 @@
 #include <linux/string.h>
 #include <linux/usb/of.h>
 #include <linux/workqueue.h>
+#include <linux/sys_soc.h>
 
 /******* USB2.0 Host registers (original offset is +0x200) *******/
 #define USB2_INT_ENABLE		0x000
@@ -64,6 +65,7 @@
 /* VBCTRL */
 #define USB2_VBCTRL_OCCLREN		BIT(16)
 #define USB2_VBCTRL_DRVVBUSSEL		BIT(8)
+#define USB2_VBCTRL_SIDDQREL		BIT(2)
 #define USB2_VBCTRL_VBOUT		BIT(0)
 
 /* LINECTRL1 */
@@ -84,6 +86,12 @@
 #define USB2_LINECTRL1_USB2_IDMON	BIT(0)
 
 #define NUM_OF_PHYS			4
+
+static const struct soc_device_attribute rzt2h_match[] = {
+	{ .family = "RZ/T2H" },
+	{ /* sentinel*/ }
+};
+
 enum rcar_gen3_phy_index {
 	PHY_INDEX_BOTH_HC,
 	PHY_INDEX_OHCI,
@@ -162,8 +170,32 @@ static void rcar_gen3_set_host_mode(struct rcar_gen3_chan *ch, int host)
 	dev_vdbg(ch->dev, "%s: %08x, %d\n", __func__, val, host);
 	if (host)
 		val &= ~USB2_COMMCTRL_OTG_PERI;
-	else
+	else {
 		val |= USB2_COMMCTRL_OTG_PERI;
+		if (soc_device_match(rzt2h_match)) {
+			/* FIXME: Hard code to access to System Configuration Control Register 0
+			 * another way.
+			 */
+			u16 reg;
+			void __iomem *syscfg0_base = ioremap(0x92041000, 0x1000);
+			/* Select HS (when high speed is supported): SYSCFG0.HSE = 1 */
+			reg = ioread16(syscfg0_base + 0x0);
+			reg |= BIT(7);
+			iowrite16(reg, syscfg0_base + 0x0);
+
+			/* Pull-down resistor OFF: SYSCFG0.DRPD = 0 */
+			reg = ioread16(syscfg0_base + 0x0);
+			reg &= ~BIT(5);
+			iowrite16(reg, syscfg0_base + 0x0);
+
+			/* Enable USB operation: SYSCFG0.USBE = 1 */
+			reg = ioread16(syscfg0_base + 0x0);
+			reg |= BIT(0);
+			iowrite16(reg, syscfg0_base + 0x0);
+
+			iounmap(syscfg0_base);
+		}
+	}
 	writel(val, usb2_base + USB2_COMMCTRL);
 }
 
@@ -461,6 +493,27 @@ static int rcar_gen3_phy_usb2_init(struct phy *p)
 		if (rcar_gen3_needs_init_otg(channel))
 			rcar_gen3_init_otg(channel);
 		rphy->otg_initialized = true;
+	}
+
+	if (soc_device_match(rzt2h_match)) {
+		/* FIXME: Hard code to access to Low Power Status Register until can find
+		 * another way.
+		 */
+		u16 reg;
+		void __iomem *lpsts_base = ioremap(0x92041000, 0x1000);
+
+		/* Suspension OFF: LPSTS.SUSPM = 1 */
+		reg = ioread16(lpsts_base + 0x102);
+		reg |= 0x4000;
+		iowrite16(reg, lpsts_base + 0x102);
+
+		iounmap(lpsts_base);
+
+		/* SIDDQ mode release: VBCTRL.SIDDQREL = 1 */
+		val = readl(usb2_base + USB2_VBCTRL);
+		val |= USB2_VBCTRL_SIDDQREL;
+		writel(val, usb2_base + USB2_VBCTRL);
+		udelay(10);
 	}
 
 	rphy->initialized = true;
