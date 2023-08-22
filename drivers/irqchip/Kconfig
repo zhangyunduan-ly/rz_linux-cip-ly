@@ -243,6 +243,10 @@ config RENESAS_RZG2L_IRQC
 	select GENERIC_IRQ_CHIP
 	select IRQ_DOMAIN
 
+config RENESAS_RZT2H_IRQC
+	bool "RZ/T2H interrupt controller"
+	select GENERIC_IRQ_CHIP
+	select IRQ_DOMAIN
 
 config RENESAS_RZA1_IRQC
 	bool "Renesas RZ/A1 IRQC support" if COMPILE_TEST
