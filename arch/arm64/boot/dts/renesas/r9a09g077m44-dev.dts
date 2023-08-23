@@ -200,6 +200,17 @@
 			 <RZT2H_PORT_PINMUX(35, 1, 0x0F)>,	/* ETH3_CRS */
 			 <RZT2H_PORT_PINMUX(35, 2, 0x0F)>;	/* ETH3_COL */
 	};
+
+	usb_exicen_a {
+		gpio-hog;
+		gpios = <RZT2H_GPIO(0, 2) GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "usb_exicen_a";
+	};
+
+	usb_pins: usb_pins {
+		pinmux = <RZT2H_PORT_PINMUX(0, 0, 0x13)>; /* VBUS */
+	};
 };
 
 &extal {
@@ -324,5 +335,29 @@
 
 &mii_conv3 {
 	renesas,ethss-port = <ETHSS_GMAC1_PORT>;
+	status = "okay";
+};
+
+&ohci {
+	memory-region = <&global_cma>;
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&ehci {
+	memory-region = <&global_cma>;
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&hsusb {
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&usb2_phy {
+	pinctrl-0 = <&usb_pins>;
+	pinctrl-names = "default";
+
 	status = "okay";
 };
