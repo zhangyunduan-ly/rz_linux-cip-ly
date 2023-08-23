@@ -508,19 +508,22 @@ static int rzt2h_cpg_reset(struct reset_controller_dev *rcdev,
 	unsigned int reg = info->resets[id].off;
 	u32 dis = info->resets[id].bit;
 	int sel_base = info->resets[id].sel_base;
+	u32 value;
 
        dev_dbg(rcdev->dev, "reset id:%ld offset:0x%x\n", id, reg);
 
        if (sel_base) {
 		/* Reset module */
-		writel(BIT(dis), priv->cpg_base1 + reg);
+		value = readl(priv->cpg_base1 + reg);
+		writel(value | BIT(dis), priv->cpg_base1 + reg);
 		udelay(35);
 		/* Release module from reset state */
-		writel(~BIT(dis), priv->cpg_base1 + reg);
+		writel(value & ~BIT(dis), priv->cpg_base1 + reg);
        } else {
-		writel(BIT(dis), priv->cpg_base0 + reg);
+		value = readl(priv->cpg_base0 + reg);
+		writel(value | BIT(dis), priv->cpg_base0 + reg);
 		udelay(35);
-		writel(~BIT(dis), priv->cpg_base0 + reg);
+		writel(value & ~BIT(dis), priv->cpg_base0 + reg);
        }
 
        return 0;
@@ -529,18 +532,22 @@ static int rzt2h_cpg_reset(struct reset_controller_dev *rcdev,
 static int rzt2h_cpg_assert(struct reset_controller_dev *rcdev,
 				unsigned long id)
 {
-       struct rzt2_cpg_priv *priv = rcdev_to_priv(rcdev);
-       const struct rzt2_cpg_info *info = priv->info;
-       unsigned int reg = info->resets[id].off;
-       u32 value = info->resets[id].bit;
-       int sel_base = info->resets[id].sel_base;
+	struct rzt2_cpg_priv *priv = rcdev_to_priv(rcdev);
+	const struct rzt2_cpg_info *info = priv->info;
+	unsigned int reg = info->resets[id].off;
+	u32 bit = info->resets[id].bit;
+	int sel_base = info->resets[id].sel_base;
+	u32 value;
 
-       dev_dbg(rcdev->dev, "assert id:%ld offset:0x%x\n", id, reg);
+	dev_dbg(rcdev->dev, "assert id:%ld offset:0x%x\n", id, reg);
 
-	if (sel_base)
-		writel(BIT(value), priv->cpg_base1 + reg);
-	else
-		writel(BIT(value), priv->cpg_base0 + reg);
+	if (sel_base) {
+		value = readl(priv->cpg_base1 + reg);
+		writel(value | BIT(bit), priv->cpg_base1 + reg);
+	} else {
+		value = readl(priv->cpg_base0 + reg);
+		writel(value | BIT(bit), priv->cpg_base0 + reg);
+	}
 
 	return 0;
 }
@@ -553,12 +560,17 @@ static int rzt2h_cpg_deassert(struct reset_controller_dev *rcdev,
 	unsigned int reg = info->resets[id].off;
 	u32 dis = info->resets[id].bit;
 	int sel_base = info->resets[id].sel_base;
+	u32 value;
 
 	dev_dbg(rcdev->dev, "deassert id:%ld offset:0x%x\n", id, reg);
-	if (sel_base)
-		writel(~BIT(dis), priv->cpg_base1 + reg);
-	else
-		writel(~BIT(dis), priv->cpg_base0 + reg);
+	if (sel_base) {
+		value = readl(priv->cpg_base1 + reg);
+		writel(value & ~BIT(dis), priv->cpg_base1 + reg);
+	} else {
+		value = readl(priv->cpg_base0 + reg);
+		writel(value & ~BIT(dis), priv->cpg_base0 + reg);
+	}
+
 	return 0;
 }
 
