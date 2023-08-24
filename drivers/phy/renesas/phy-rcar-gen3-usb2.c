@@ -29,8 +29,10 @@
 /******* USB2.0 Host registers (original offset is +0x200) *******/
 #define USB2_INT_ENABLE		0x000
 #define USB2_USBCTR		0x00c
+#define USB2_REGEN_CG_CTRL	0x104
 #define USB2_SPD_RSM_TIMSET	0x10c
 #define USB2_OC_TIMSET		0x110
+#define USB2_UTMI_CTRL		0x118
 #define USB2_COMMCTRL		0x600
 #define USB2_OBINTSTA		0x604
 #define USB2_OBINTEN		0x608
@@ -85,6 +87,9 @@
 #define USB2_OBINT_IDCHG_EN		BIT(0)
 #define USB2_LINECTRL1_USB2_IDMON	BIT(0)
 
+/* RZ/V2H specific */
+#define USB2_UPHY_WEN			BIT(0)
+
 #define NUM_OF_PHYS			4
 
 static const struct soc_device_attribute rzt2h_match[] = {
@@ -130,11 +135,13 @@ struct rcar_gen3_chan {
 	bool is_otg_channel;
 	bool uses_otg_pins;
 	bool soc_no_adp_ctrl;
+	bool soc_no_utmi_ctrl;
 };
 
 struct rcar_gen3_phy_drv_data {
 	const struct phy_ops *phy_usb2_ops;
 	bool no_adp_ctrl;
+	bool no_utmi_ctrl;
 };
 
 /*
@@ -516,6 +523,13 @@ static int rcar_gen3_phy_usb2_init(struct phy *p)
 		udelay(10);
 	}
 
+	if (!channel->soc_no_utmi_ctrl) {
+		val = readl(usb2_base + USB2_REGEN_CG_CTRL);
+		writel(val | USB2_UPHY_WEN, usb2_base + USB2_REGEN_CG_CTRL);
+		writel(0x8000018F, usb2_base + USB2_UTMI_CTRL);
+		writel(val, usb2_base + USB2_REGEN_CG_CTRL);
+	};
+
 	rphy->initialized = true;
 
 	return 0;
@@ -615,16 +629,25 @@ static const struct phy_ops rz_g1c_phy_usb2_ops = {
 static const struct rcar_gen3_phy_drv_data rcar_gen3_phy_usb2_data = {
 	.phy_usb2_ops = &rcar_gen3_phy_usb2_ops,
 	.no_adp_ctrl = false,
+	.no_utmi_ctrl = true,
 };
 
 static const struct rcar_gen3_phy_drv_data rz_g1c_phy_usb2_data = {
 	.phy_usb2_ops = &rz_g1c_phy_usb2_ops,
 	.no_adp_ctrl = false,
+	.no_utmi_ctrl = true,
 };
 
 static const struct rcar_gen3_phy_drv_data rz_g2l_phy_usb2_data = {
 	.phy_usb2_ops = &rcar_gen3_phy_usb2_ops,
 	.no_adp_ctrl = true,
+	.no_utmi_ctrl = true,
+};
+
+static const struct rcar_gen3_phy_drv_data rz_t2h_phy_usb2_data = {
+	.phy_usb2_ops = &rcar_gen3_phy_usb2_ops,
+	.no_adp_ctrl = true,
+	.no_utmi_ctrl = false,
 };
 
 static const struct of_device_id rcar_gen3_phy_usb2_match_table[] = {
@@ -651,6 +674,10 @@ static const struct of_device_id rcar_gen3_phy_usb2_match_table[] = {
 	{
 		.compatible = "renesas,rcar-gen3-usb2-phy",
 		.data = &rcar_gen3_phy_usb2_data,
+	},
+	{
+		.compatible = "renesas,rzt2h-usb2-phy",
+		.data = &rz_t2h_phy_usb2_data,
 	},
 	{ /* sentinel */ },
 };
@@ -756,7 +783,7 @@ static int rcar_gen3_phy_usb2_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto error;
 	}
-
+	channel->soc_no_utmi_ctrl = phy_data->no_utmi_ctrl;
 	channel->soc_no_adp_ctrl = phy_data->no_adp_ctrl;
 	if (phy_data->no_adp_ctrl)
 		channel->obint_enable_bits = USB2_OBINT_IDCHG_EN;
