@@ -319,32 +319,32 @@ static void rcar_du_crtc_set_display_timing(struct rcar_du_crtc *rcrtc)
 
 find_div:
 			for (csdiv = 2; csdiv <= 32; csdiv = csdiv + 2) {
-				for (pll_p = 2; pll_p <= 8; pll_p += 2) {
+				for (pll_p = 2; pll_p <= 8; pll_p++) {
 					for (pll_s = 0; pll_s <= 6; pll_s++) {
 						mult = vclk * csdiv *
 						       (pll_p << pll_s);
 
-						div = mult / 24000;
+						div = mult / 48000;
 						if ((div < 64) || (div > 533))
 							continue;
 
-						res = mult % 24000;
-						if (res >= 12000) {
+						res = mult % 48000;
+						if (res >= 24000) {
 							pll_m = div + 1;
-							pll_k = (res - 24000) * 65536 / 24000;
-							if (!(((res - 24000) * 65536) % 24000))
+							pll_k = (res - 48000) * 65536 / 48000;
+							if (!(((res - 48000) * 65536) % 48000))
 								goto found;
 						} else {
 							pll_m = div;
-							pll_k = res * 65536 / 24000;
-							if (!((res * 65536) % 24000))
+							pll_k = res * 65536 / 48000;
+							if (!((res * 65536) % 48000))
 								goto found;
 						}
 					}
 				}
 			}
 
-			dev_info(rcrtc->dev->dev,
+			dev_dbg(rcrtc->dev->dev,
 				 "Not found pll setting for %lu (kHz)\n",
 				 vclk);
 
