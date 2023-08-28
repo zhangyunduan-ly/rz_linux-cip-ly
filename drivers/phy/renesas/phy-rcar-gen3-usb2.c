@@ -61,8 +61,12 @@
 /* OBINTSTA and OBINTEN */
 #define USB2_OBINT_SESSVLDCHG		BIT(12)
 #define USB2_OBINT_IDDIGCHG		BIT(11)
+#define USB2_OBINT_VBSTAINT		BIT(3)
+#define USB2_OBINT_IDCHG		BIT(0)
 #define USB2_OBINT_BITS			(USB2_OBINT_SESSVLDCHG | \
 					 USB2_OBINT_IDDIGCHG)
+#define USB2_OBINT_BITS_T2H		(USB2_OBINT_IDCHG | \
+					 USB2_OBINT_VBSTAINT)
 
 /* VBCTRL */
 #define USB2_VBCTRL_OCCLREN		BIT(16)
@@ -177,39 +181,23 @@ static void rcar_gen3_set_host_mode(struct rcar_gen3_chan *ch, int host)
 	dev_vdbg(ch->dev, "%s: %08x, %d\n", __func__, val, host);
 	if (host)
 		val &= ~USB2_COMMCTRL_OTG_PERI;
-	else {
+	else
 		val |= USB2_COMMCTRL_OTG_PERI;
-		if (soc_device_match(rzt2h_match)) {
-			/* FIXME: Hard code to access to System Configuration Control Register 0
-			 * another way.
-			 */
-			u16 reg;
-			void __iomem *syscfg0_base = ioremap(0x92041000, 0x1000);
-			/* Select HS (when high speed is supported): SYSCFG0.HSE = 1 */
-			reg = ioread16(syscfg0_base + 0x0);
-			reg |= BIT(7);
-			iowrite16(reg, syscfg0_base + 0x0);
 
-			/* Pull-down resistor OFF: SYSCFG0.DRPD = 0 */
-			reg = ioread16(syscfg0_base + 0x0);
-			reg &= ~BIT(5);
-			iowrite16(reg, syscfg0_base + 0x0);
-
-			/* Enable USB operation: SYSCFG0.USBE = 1 */
-			reg = ioread16(syscfg0_base + 0x0);
-			reg |= BIT(0);
-			iowrite16(reg, syscfg0_base + 0x0);
-
-			iounmap(syscfg0_base);
-		}
-	}
 	writel(val, usb2_base + USB2_COMMCTRL);
 }
 
 static void rcar_gen3_set_linectrl(struct rcar_gen3_chan *ch, int dp, int dm)
 {
 	void __iomem *usb2_base = ch->base;
-	u32 val = readl(usb2_base + USB2_LINECTRL1);
+	u32 val;
+	if (soc_device_match(rzt2h_match)) {
+		val = readl(usb2_base + USB2_VBCTRL);
+		val &= ~BIT(21);
+		writel(val, usb2_base + USB2_VBCTRL);
+	}
+
+	val = readl(usb2_base + USB2_LINECTRL1);
 
 	dev_vdbg(ch->dev, "%s: %08x, %d, %d\n", __func__, val, dp, dm);
 	val &= ~(USB2_LINECTRL1_DP_RPD | USB2_LINECTRL1_DM_RPD);
@@ -267,7 +255,10 @@ static void rcar_gen3_init_for_peri(struct rcar_gen3_chan *ch)
 {
 	rcar_gen3_set_linectrl(ch, 0, 1);
 	rcar_gen3_set_host_mode(ch, 0);
-	rcar_gen3_enable_vbus_ctrl(ch, 0);
+	if (soc_device_match(rzt2h_match))
+		rcar_gen3_enable_vbus_ctrl(ch, 1);
+	else
+		rcar_gen3_enable_vbus_ctrl(ch, 0);
 
 	ch->extcon_host = false;
 	schedule_work(&ch->work);
@@ -441,7 +432,10 @@ static void rcar_gen3_init_otg(struct rcar_gen3_chan *ch)
 	if (!ch->soc_no_adp_ctrl) {
 		val = readl(usb2_base + USB2_VBCTRL);
 		val &= ~USB2_VBCTRL_OCCLREN;
-		writel(val | USB2_VBCTRL_DRVVBUSSEL, usb2_base + USB2_VBCTRL);
+		if (soc_device_match(rzt2h_match))
+			writel(val | BIT(21), usb2_base + USB2_VBCTRL);
+		else
+			writel(val | USB2_VBCTRL_DRVVBUSSEL, usb2_base + USB2_VBCTRL);
 		val = readl(usb2_base + USB2_ADPCTRL);
 		writel(val | USB2_ADPCTRL_IDPULLUP, usb2_base + USB2_ADPCTRL);
 	}
@@ -462,7 +456,10 @@ static irqreturn_t rcar_gen3_phy_usb2_irq(int irq, void *_ch)
 
 	if (status & ch->obint_enable_bits) {
 		dev_vdbg(ch->dev, "%s: %08x\n", __func__, status);
-		writel(ch->obint_enable_bits, usb2_base + USB2_OBINTSTA);
+		if (soc_device_match(rzt2h_match))
+			writel(0xffffffff, usb2_base + USB2_OBINTSTA);
+		else
+			writel(ch->obint_enable_bits, usb2_base + USB2_OBINTSTA);
 		rcar_gen3_device_recognition(ch);
 		ret = IRQ_HANDLED;
 	}
@@ -646,7 +643,7 @@ static const struct rcar_gen3_phy_drv_data rz_g2l_phy_usb2_data = {
 
 static const struct rcar_gen3_phy_drv_data rz_t2h_phy_usb2_data = {
 	.phy_usb2_ops = &rcar_gen3_phy_usb2_ops,
-	.no_adp_ctrl = true,
+	.no_adp_ctrl = false,
 	.no_utmi_ctrl = false,
 };
 
@@ -750,7 +747,11 @@ static int rcar_gen3_phy_usb2_probe(struct platform_device *pdev)
 	if (IS_ERR(channel->base))
 		return PTR_ERR(channel->base);
 
-	channel->obint_enable_bits = USB2_OBINT_BITS;
+	if (soc_device_match(rzt2h_match))
+		channel->obint_enable_bits = USB2_OBINT_BITS_T2H;
+	else
+		channel->obint_enable_bits = USB2_OBINT_BITS;
+
 	/* get irq number here and request_irq for OTG in phy_init */
 	channel->irq = platform_get_irq_optional(pdev, 0);
 	channel->dr_mode = rcar_gen3_get_dr_mode(dev->of_node);
