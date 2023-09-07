@@ -59,6 +59,18 @@ source "drivers/net/dsa/qca/Kconfig"
 
 source "drivers/net/dsa/sja1105/Kconfig"
 
+config NET_DSA_RZT2H_ETHSW
+	tristate "Renesas RZ/T2H Ethernet switch support"
+	depends on OF
+	select NET_DSA_TAG_RZT2H_ETHSW
+	select RZT2H_ETHSS
+	help
+	  This driver supports the ETHSW switch, which is embedded in Renesas
+	  RZ/T2H SoC. Enable NET_DSA_TAG_RZT2H_ETHSW to enable tag for
+	  management port.
+
+	  To compile this driver as a module, choose M here.
+
 config NET_DSA_QCA8K
 	tristate "Qualcomm Atheros QCA8K Ethernet switch family support"
 	depends on NET_DSA
