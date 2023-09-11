@@ -420,6 +420,9 @@ static void renesas_rzt2h_eqos_fix_speed(void *priv, unsigned int speed)
 {
 	struct renesas_rzt2h_eqos *eqos = priv;
 
+	if (!eqos->ethss_port)
+		return;
+
 	switch (speed) {
 	case SPEED_1000:
 		ethss_link_up(eqos->ethss_port, eqos->ethss_port->interface,
@@ -476,33 +479,33 @@ static void *renesas_rzt2h_eqos_probe(struct platform_device *pdev,
 		goto bypass_clk_reset_gpio;
 
 	pcs_node = of_parse_phandle(node, "pcs-handle", 0);
-	if (!pcs_node) {
-		dev_err(eqos->dev, "Failed to get pcs-handle\n");
-		goto error;
+	if (!pcs_node)
+		dev_info(eqos->dev, "Not use pcs-handle\n");
+
+	if (pcs_node) {
+		eqos->ethss_port = ethss_create(eqos->dev, pcs_node);
+		if (IS_ERR(eqos->ethss_port)) {
+			dev_err(eqos->dev, "Failed to create PCS for ETHSS\n");
+			goto error;
+		}
+
+		err = of_get_phy_mode(dev->of_node, &interface);
+		if (err < 0) {
+			dev_err(eqos->dev, "Failed to get phy mode\n");
+			goto ethss;
+		}
+
+		err = ethss_config(eqos->ethss_port, interface);
+		if (err < 0) {
+			dev_err(&pdev->dev, "Failed to config ethss\n");
+			goto ethss;
+		}
+
+		dev_dbg(&pdev->dev, "Config ETHSS port = %d , mode = %s for GMAC OK\n",
+			eqos->ethss_port->port, phy_modes(eqos->ethss_port->interface));
 	}
 
-	eqos->ethss_port = ethss_create(eqos->dev, pcs_node);
-	if (IS_ERR(eqos->ethss_port)) {
-		dev_err(eqos->dev, "Failed to create PCS for ETHSS\n");
-		goto error;
-	}
-
-	err = of_get_phy_mode(dev->of_node, &interface);
-	if (err < 0) {
-		dev_err(eqos->dev, "Failed to get phy mode\n");
-		goto ethss;
-	}
-
-	err = ethss_config(eqos->ethss_port, interface);
-	if (err < 0) {
-		dev_err(&pdev->dev, "Failed to config ethss\n");
-		goto ethss;
-	}
-
-	dev_dbg(&pdev->dev, "Config ETHSS port = %d , mode = %s for GMAC OK\n",
-		eqos->ethss_port->port, phy_modes(eqos->ethss_port->interface));
-
-	eqos->reset = devm_gpiod_get(&pdev->dev, "phy-reset", GPIOD_OUT_HIGH);
+	eqos->reset = devm_gpiod_get_optional(&pdev->dev, "phy-reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(eqos->reset)) {
 		err = PTR_ERR(eqos->reset);
 		goto ethss;
@@ -522,9 +525,6 @@ static void *renesas_rzt2h_eqos_probe(struct platform_device *pdev,
 	dev_dbg(&pdev->dev, "Enabled clk\n");
 
 	data->stmmac_clk = eqos->clk;
-
-	/* MDIO bus was already reset just above */
-	data->mdio_bus_data->needs_reset = false;
 
 	eqos->rst_h = devm_reset_control_get(&pdev->dev, "reset_h");
 	if (IS_ERR(eqos->rst_h)) {
@@ -604,7 +604,8 @@ reset_h:
 reset_gpio:
 	gpiod_set_value(eqos->reset, 0);
 ethss:
-	ethss_destroy(eqos->ethss_port);
+	if (pcs_node)
+		ethss_destroy(eqos->ethss_port);
 error:
 	eqos = ERR_PTR(err);
 	goto out;
@@ -614,7 +615,9 @@ static int renesas_rzt2h_eqos_remove(struct platform_device *pdev)
 {
 	struct renesas_rzt2h_eqos *eqos = get_stmmac_bsp_priv(&pdev->dev);
 
-	ethss_destroy(eqos->ethss_port);
+	if (eqos->ethss_port)
+		ethss_destroy(eqos->ethss_port);
+
 	gpiod_set_value(eqos->reset, 0);
 	clk_disable_unprepare(eqos->clk);
 	reset_control_assert(eqos->rst_h);
