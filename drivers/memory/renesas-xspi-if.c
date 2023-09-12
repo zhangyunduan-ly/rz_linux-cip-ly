@@ -257,6 +257,7 @@ static int xspi_reg_read(void *context, unsigned int reg, unsigned int *val)
 
 	switch (reg) {
 	case XSPI_CDD0BUF0:
+	case XSPI_CDD1BUF0:
 		switch (xspi->xfer_size) {
 		case 1:
 			*val = readb(xspi->base + reg);
@@ -287,6 +288,7 @@ static int xspi_reg_write(void *context, unsigned int reg, unsigned int val)
 
 	switch (reg) {
 	case XSPI_CDD0BUF0:
+	case XSPI_CDD1BUF0:
 		switch (xspi->xfer_size) {
 		case 1:
 			writeb(val, xspi->base + reg);
@@ -447,7 +449,7 @@ EXPORT_SYMBOL(xspi_prepare);
 
 int xspi_manual_xfer(struct rpcif *xspi)
 {
-	u32 pos = 0, max = xspi->bus_size == 2 ? 8 : 4;
+	u32 pos = 0, max = 8;
 	int ret = 0;
 
 	pm_runtime_get_sync(xspi->dev);
@@ -482,8 +484,7 @@ int xspi_manual_xfer(struct rpcif *xspi)
 			regmap_update_bits(xspi->regmap, XSPI_CDTBUF0,
 					XSPI_CDTBUF_TRTYPE, XSPI_CDTBUF_TRTYPE);
 
-			/* nbytes may only be 1, 2, 4, or 8 */
-			nbytes = bytes_left >= max ? max : (1 << ilog2(bytes_left));
+			nbytes = bytes_left >= max ? max : bytes_left;
 
 			regmap_update_bits(xspi->regmap, XSPI_CDTBUF0,
 					XSPI_CDTBUF_DATASIZE(0xf),
@@ -496,7 +497,17 @@ int xspi_manual_xfer(struct rpcif *xspi)
 			xspi->xfer_size = nbytes;
 
 			memcpy(data, xspi->buffer + pos, nbytes);
-			regmap_write(xspi->regmap, XSPI_CDD0BUF0, *p);
+
+			if (nbytes > 4) {
+				xspi->xfer_size = 4;
+				regmap_write(xspi->regmap, XSPI_CDD0BUF0, *p++);
+				xspi->xfer_size = 1 << ilog2(nbytes - 4);
+				regmap_write(xspi->regmap, XSPI_CDD1BUF0, *p);
+			} else {
+				xspi->xfer_size = 1 << ilog2(bytes_left);
+				regmap_write(xspi->regmap, XSPI_CDD0BUF0, *p);
+			}
+
 			regmap_write(xspi->regmap, XSPI_CDABUF0, xspi->smadr + pos);
 
 			regmap_update_bits(xspi->regmap, XSPI_CDCTL0,
@@ -522,8 +533,8 @@ int xspi_manual_xfer(struct rpcif *xspi)
 			regmap_update_bits(xspi->regmap, XSPI_CDTBUF0,
 					XSPI_CDTBUF_TRTYPE, ~(u32)XSPI_CDTBUF_TRTYPE);
 
-			/* nbytes may only be 1, 2, 4, or 8 */
-			nbytes = bytes_left >= max ? max : (1 << ilog2(bytes_left));
+			/* nbytes can be up to 8 bytes */
+			nbytes = bytes_left >= max ? max : bytes_left;
 
 			regmap_update_bits(xspi->regmap, XSPI_CDTBUF0,
 					XSPI_CDTBUF_DATASIZE(0xf),
@@ -533,7 +544,6 @@ int xspi_manual_xfer(struct rpcif *xspi)
 					XSPI_CDTBUF_ADDSIZE(0x7),
 					XSPI_CDTBUF_ADDSIZE(xspi->addr_nbytes));
 
-			xspi->xfer_size = nbytes;
 
 			if (xspi->addr_nbytes)
 				regmap_write(xspi->regmap, XSPI_CDABUF0, xspi->smadr + pos);
@@ -549,7 +559,16 @@ int xspi_manual_xfer(struct rpcif *xspi)
 			if (ret)
 				goto err_out;
 
-			regmap_read(xspi->regmap, XSPI_CDD0BUF0, p);
+			if (nbytes > 4) {
+				xspi->xfer_size = 4;
+				regmap_read(xspi->regmap, XSPI_CDD0BUF0, p++);
+				xspi->xfer_size = 1 << ilog2(nbytes - 4);
+				regmap_read(xspi->regmap, XSPI_CDD1BUF0, p);
+			} else {
+				xspi->xfer_size = 1 << ilog2(bytes_left);
+				regmap_read(xspi->regmap, XSPI_CDD0BUF0, p);
+			}
+
 			memcpy(xspi->buffer + pos, data, nbytes);
 
 			regmap_update_bits(xspi->regmap, XSPI_INTC,
