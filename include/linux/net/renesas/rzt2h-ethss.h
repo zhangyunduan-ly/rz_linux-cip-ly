@@ -35,5 +35,6 @@ struct ethss_port *ethss_create(struct device *dev, struct device_node *np);
 void ethss_link_up(struct ethss_port *ethss_port, phy_interface_t interface,
 		   int speed, int duplex);
 int ethss_config(struct ethss_port *ethss_port, phy_interface_t interface);
+void ethss_switchcore_adjust(struct ethss_port *ethss_port, int duplex, int speed);
 
 #endif
