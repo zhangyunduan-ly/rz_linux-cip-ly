@@ -36,12 +36,12 @@ struct sh_cmt_device;
  * SoC but also on the particular instance. The following table lists the main
  * characteristics of those flavours.
  *
- *			16B	32B	32B-F	48B	R-Car Gen2
- * -----------------------------------------------------------------------------
- * Channels		2	1/4	1	6	2/8
- * Control Width	16	16	16	16	32
- * Counter Width	16	32	32	32/48	32/48
- * Shared Start/Stop	Y	Y	Y	Y	N
+ *			16B	32B	32B-F	48B	R-Car Gen2	16B T2H		32B T2H
+ * -----------------------------------------------------------------------------------------------------
+ * Channels		2	1/4	1	6	2/8		2		1
+ * Control Width	16	16	16	16	32		16		16
+ * Counter Width	16	32	32	32/48	32/48		16		32
+ * Shared Start/Stop	Y	Y	Y	Y	N		Y		N
  *
  * The r8a73a4 / R-Car Gen2 version has a per-channel start/stop register
  * located in the channel registers block. All other versions have a shared
@@ -66,6 +66,8 @@ enum sh_cmt_model {
 	SH_CMT_48BIT,
 	SH_CMT0_RCAR_GEN2,
 	SH_CMT1_RCAR_GEN2,
+	SH_CMT_T2H,
+	SH_CMTW_T2H,
 };
 
 struct sh_cmt_info {
@@ -74,6 +76,7 @@ struct sh_cmt_info {
 	unsigned int channels_mask;
 
 	unsigned long width; /* 16 or 32 bit version of hardware block */
+	unsigned long control_width; /* 16 or 32 bit version of control register */
 	u32 overflow_bit;
 	u32 clear_bits;
 
@@ -95,6 +98,9 @@ struct sh_cmt_channel {
 
 	void __iomem *iostart;
 	void __iomem *ioctrl;
+	void __iomem *ioctrlio;
+	void __iomem *iocount;
+	void __iomem *iomatch;
 
 	unsigned int timer_bit;
 	unsigned long flags;
@@ -134,6 +140,26 @@ struct sh_cmt_device {
 #define SH_CMT16_CMCSR_CKS128		(2 << 0)
 #define SH_CMT16_CMCSR_CKS512		(3 << 0)
 #define SH_CMT16_CMCSR_CKS_MASK		(3 << 0)
+
+#define SH_CMTW_CMCR_CKS8		(0 << 0)
+#define SH_CMTW_CMCR_CKS32		(1 << 0)
+#define SH_CMTW_CMCR_CKS128		(2 << 0)
+#define SH_CMTW_CMCR_CKS512		(3 << 0)
+#define SH_CMTW_CMCR_CKS_MASK		(3 << 0)
+#define SH_CMTW_CMCR_CMIE		(1 << 3)
+#define SH_CMTW_CMCR_IC0IE		(1 << 4)
+#define SH_CMTW_CMCR_IC1IE		(1 << 5)
+#define SH_CMTW_CMCR_OC0IE		(1 << 6)
+#define SH_CMTW_CMCR_OC1IE		(1 << 7)
+#define SH_CMTW_CMCR_CMS32		(0 << 9)
+#define SH_CMTW_CMCR_CMS16		(1 << 9)
+#define SH_CMTW_CMCR_CCLR_COR		(0 << 13)
+#define SH_CMTW_CMCR_CCLR_ICR0		(4 << 13)
+#define SH_CMTW_CMCR_CCLR_ICR1		(5 << 13)
+#define SH_CMTW_CMCR_CCLR_OCR0		(6 << 13)
+#define SH_CMTW_CMCR_CCLR_OCR1		(7 << 13)
+
+#define SH_CMTW_CMIOR_CME		(1 << 15)
 
 #define SH_CMT32_CMCSR_CMF		(1 << 15)
 #define SH_CMT32_CMCSR_OVF		(1 << 14)
@@ -229,6 +255,29 @@ static const struct sh_cmt_info sh_cmt_info[] = {
 		.read_count = sh_cmt_read32,
 		.write_count = sh_cmt_write32,
 	},
+	[SH_CMT_T2H] = {
+		.model = SH_CMT_T2H,
+		.channels_mask = 0x03,
+		.width = 16,
+		.overflow_bit = 0,
+		.clear_bits = ~0,
+		.read_control = sh_cmt_read16,
+		.write_control = sh_cmt_write16,
+		.read_count = sh_cmt_read16,
+		.write_count = sh_cmt_write16,
+	},
+	[SH_CMTW_T2H] = {
+		.model = SH_CMTW_T2H,
+		.channels_mask = 0x01,
+		.control_width = 16,
+		.width = 32,
+		.overflow_bit = 0,
+		.clear_bits = ~0,
+		.read_control = sh_cmt_read16,
+		.write_control = sh_cmt_write16,
+		.read_count = sh_cmt_read32,
+		.write_count = sh_cmt_write32,
+	},
 };
 
 #define CMCSR 0 /* channel register */
@@ -261,19 +310,38 @@ static inline void sh_cmt_write_cmcsr(struct sh_cmt_channel *ch, u32 value)
 	ch->cmt->info->write_control(ch->ioctrl, CMCSR, value);
 }
 
+static inline u32 sh_cmt_read_cmior(struct sh_cmt_channel *ch)
+{
+	return ch->cmt->info->read_control(ch->ioctrlio, 0);
+}
+
+static inline void sh_cmt_write_cmior(struct sh_cmt_channel *ch, u32 value)
+{
+	ch->cmt->info->write_control(ch->ioctrlio, 0, value);
+}
+
 static inline u32 sh_cmt_read_cmcnt(struct sh_cmt_channel *ch)
 {
-	return ch->cmt->info->read_count(ch->ioctrl, CMCNT);
+	if (ch->iocount)
+		return ch->cmt->info->read_count(ch->iocount, 0);
+	else
+		return ch->cmt->info->read_count(ch->ioctrl, CMCNT);
 }
 
 static inline void sh_cmt_write_cmcnt(struct sh_cmt_channel *ch, u32 value)
 {
-	ch->cmt->info->write_count(ch->ioctrl, CMCNT, value);
+	if (ch->iocount)
+		ch->cmt->info->write_count(ch->iocount, 0, value);
+	else
+		ch->cmt->info->write_count(ch->ioctrl, CMCNT, value);
 }
 
 static inline void sh_cmt_write_cmcor(struct sh_cmt_channel *ch, u32 value)
 {
-	ch->cmt->info->write_count(ch->ioctrl, CMCOR, value);
+	if (ch->iomatch)
+		ch->cmt->info->write_count(ch->iomatch, 0, value);
+	else
+		ch->cmt->info->write_count(ch->ioctrl, CMCOR, value);
 }
 
 static u32 sh_cmt_get_counter(struct sh_cmt_channel *ch, u32 *has_wrapped)
@@ -338,10 +406,18 @@ static int sh_cmt_enable(struct sh_cmt_channel *ch)
 		sh_cmt_write_cmcsr(ch, SH_CMT16_CMCSR_CMIE |
 				   SH_CMT16_CMCSR_CKS512);
 	} else {
-		sh_cmt_write_cmcsr(ch, SH_CMT32_CMCSR_CMM |
-				   SH_CMT32_CMCSR_CMTOUT_IE |
-				   SH_CMT32_CMCSR_CMR_IRQ |
-				   SH_CMT32_CMCSR_CKS_RCLK8);
+		if (ch->cmt->info->control_width == 16) {
+			sh_cmt_write_cmcsr(ch, SH_CMTW_CMCR_CKS8 |
+					   SH_CMTW_CMCR_CMIE |
+					   SH_CMTW_CMCR_CMS32 |
+					   SH_CMTW_CMCR_CCLR_COR);
+			sh_cmt_write_cmior(ch, SH_CMTW_CMIOR_CME);
+		} else {
+			sh_cmt_write_cmcsr(ch, SH_CMT32_CMCSR_CMM |
+					   SH_CMT32_CMCSR_CMTOUT_IE |
+					   SH_CMT32_CMCSR_CMR_IRQ |
+					   SH_CMT32_CMCSR_CKS_RCLK8);
+		}
 	}
 
 	sh_cmt_write_cmcor(ch, 0xffffffff);
@@ -490,6 +566,40 @@ static void sh_cmt_clock_event_program_verify(struct sh_cmt_channel *ch,
 	} while (delay);
 }
 
+static int sh_cmt_set_next_absolute(struct sh_cmt_channel *ch, unsigned long delta)
+{
+	int k;
+
+	if (delta > ch->max_match_value)
+		dev_warn(&ch->cmt->pdev->dev, "ch%u: delta out of range\n",
+			 ch->index);
+
+	/* stop timer */
+	sh_cmt_start_stop_ch(ch, 0);
+
+	sh_cmt_write_cmcnt(ch, 0);
+
+	for (k = 0; k < 100; k++) {
+		if (!sh_cmt_read_cmcnt(ch))
+			break;
+		udelay(1);
+	}
+
+	if (sh_cmt_read_cmcnt(ch)) {
+		dev_err(&ch->cmt->pdev->dev, "ch%u: cannot clear CMCNT\n",
+			ch->index);
+		return -ETIMEDOUT;
+	}
+
+	/* reload delta value in case of periodic timer */
+	ch->next_match_value = delta;
+	sh_cmt_clock_event_program_verify(ch, 1);
+
+	/* start timer */
+	sh_cmt_start_stop_ch(ch, 1);
+	return 0;
+}
+
 static void __sh_cmt_set_next(struct sh_cmt_channel *ch, unsigned long delta)
 {
 	if (delta > ch->max_match_value)
@@ -512,6 +622,9 @@ static void sh_cmt_set_next(struct sh_cmt_channel *ch, unsigned long delta)
 static irqreturn_t sh_cmt_interrupt(int irq, void *dev_id)
 {
 	struct sh_cmt_channel *ch = dev_id;
+
+	if (!(ch->cmt->info->overflow_bit) && clockevent_state_oneshot(&ch->ced))
+		sh_cmt_start_stop_ch(ch, 0);
 
 	/* clear flags */
 	sh_cmt_write_cmcsr(ch, sh_cmt_read_cmcsr(ch) &
@@ -572,7 +685,7 @@ static int sh_cmt_start(struct sh_cmt_channel *ch, unsigned long flag)
 	ch->flags |= flag;
 
 	/* setup timeout if no clockevent */
-	if (ch->cmt->num_channels == 1 &&
+	if (ch->cmt->num_channels == 1 && ch->cmt->info->overflow_bit != 0 &&
 	    flag == FLAG_CLOCKSOURCE && (!(ch->flags & FLAG_CLOCKEVENT)))
 		__sh_cmt_set_next(ch, ch->max_match_value);
  out:
@@ -611,7 +724,7 @@ static u64 sh_cmt_clocksource_read(struct clocksource *cs)
 	struct sh_cmt_channel *ch = cs_to_sh_cmt(cs);
 	u32 has_wrapped;
 
-	if (ch->cmt->num_channels == 1) {
+	if (ch->cmt->num_channels == 1 && ch->cmt->info->overflow_bit != 0) {
 		unsigned long flags;
 		u64 value;
 		u32 raw;
@@ -709,6 +822,12 @@ static void sh_cmt_clock_event_start(struct sh_cmt_channel *ch, int periodic)
 {
 	sh_cmt_start(ch, FLAG_CLOCKEVENT);
 
+	/* If only oneshot clockevent mode will be used
+	 * there is no point keep the count running
+	 */
+	if (!(ch->cmt->info->overflow_bit) && !periodic)
+		sh_cmt_start_stop_ch(ch, 0);
+
 	if (periodic)
 		sh_cmt_set_next(ch, ((ch->cmt->rate + HZ/2) / HZ) - 1);
 	else
@@ -754,6 +873,11 @@ static int sh_cmt_clock_event_next(unsigned long delta,
 	struct sh_cmt_channel *ch = ced_to_sh_cmt(ced);
 
 	BUG_ON(!clockevent_state_oneshot(ced));
+
+	/* Restart the count to zero and set next event*/
+	if (!(ch->cmt->info->overflow_bit))
+		return sh_cmt_set_next_absolute(ch, delta);
+
 	if (likely(ch->flags & FLAG_IRQCONTEXT))
 		ch->next_match_value = delta - 1;
 	else
@@ -879,6 +1003,15 @@ static int sh_cmt_setup_channel(struct sh_cmt_channel *ch, unsigned int index,
 		ch->ioctrl = ch->iostart + 0x10;
 		ch->timer_bit = 0;
 		break;
+	case SH_CMT_T2H:
+		ch->ioctrl = cmt->mapbase + 2 + ch->hwidx * 6;
+		break;
+	case SH_CMTW_T2H:
+		ch->ioctrl = cmt->mapbase + 4;
+		ch->ioctrlio = ch->ioctrl + 4;
+		ch->iocount = ch->ioctrlio + 8;
+		ch->iomatch = ch->iocount + 4;
+		break;
 	}
 
 	if (cmt->info->width == (sizeof(ch->max_match_value) * 8))
@@ -962,6 +1095,14 @@ static const struct of_device_id sh_cmt_of_table[] __maybe_unused = {
 		.compatible = "renesas,rcar-gen3-cmt1",
 		.data = &sh_cmt_info[SH_CMT1_RCAR_GEN2]
 	},
+	{
+		.compatible = "renesas,t2h-cmt",
+		.data = &sh_cmt_info[SH_CMT_T2H]
+	},
+	{
+		.compatible = "renesas,t2h-cmtw",
+		.data = &sh_cmt_info[SH_CMTW_T2H]
+	},
 	{ }
 };
 MODULE_DEVICE_TABLE(of, sh_cmt_of_table);
@@ -1032,7 +1173,8 @@ static int sh_cmt_setup(struct sh_cmt_device *cmt, struct platform_device *pdev)
 	 */
 	for (i = 0, mask = cmt->hw_channels; i < cmt->num_channels; ++i) {
 		unsigned int hwidx = ffs(mask) - 1;
-		bool clocksource = i == 1 || cmt->num_channels == 1;
+		/* If device lack of status bit and if only one channel is available use it as a clock event */
+		bool clocksource = i == 1 || ( cmt->num_channels == 1 && cmt->info->overflow_bit != 0 );
 		bool clockevent = i == 0;
 
 		ret = sh_cmt_setup_channel(&cmt->channels[i], i, hwidx,
