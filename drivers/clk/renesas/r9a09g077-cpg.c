@@ -274,7 +274,7 @@ static const struct {
 					0x300, 26, 0),
 		DEF_MOD("scie11",	R9A09G077_SCIE11_CLK, R9A09G077_PCLKM,
 					0x300, 27, 0),
-		DEF_MOD("rtc",		R9A09G077_RTC_CLK, R9A09G077_PCLKL,
+		DEF_MOD("rtc",		R9A09G077_RTC_CLK, R9A09G077_PCLKRTC,
 					0x318, 5, 1),
 	},
 };
