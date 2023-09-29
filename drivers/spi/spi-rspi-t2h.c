@@ -379,9 +379,9 @@ static int rspi_pio_transfer(struct rspi_data *rspi, const void *tx, void *rx,
 	}
 
 	if (words % rspi->ops->fifo_size)
-		loop = words / rspi->ops->fifo_size;
-	else
 		loop = words / rspi->ops->fifo_size + 1;
+	else
+		loop = words / rspi->ops->fifo_size;
 
 	for (loop_count = 0; loop_count < loop; loop_count++) {
 		remained_words = words - loop_count * rspi->ops->fifo_size;
