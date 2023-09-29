@@ -593,6 +593,8 @@
 			clocks = <&cpg CPG_MOD R9A09G077_SPI0_CLK>;
 			power-domains = <&cpg>;
 			num-cs = <1>;
+			dmas = <&dmac0 0x267B>, <&dmac0 0x267A>;
+			dma-names = "tx", "rx";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
