@@ -1,0 +1,24 @@
+Real Time Clock on-chip Renesas RZ/T2H
+
+Required properties:
+- compatible: Must be set "renesas,rzt2h-rtc"
+- reg: physical base address of the controller and length of memory mapped
+  region.
+- interrupt: IRQ line for the RTC.
+- clocks: Clock source for RTC.
+
+Optional properties:
+- interrupt-name: name of interrupt line.
+- clocks: Name of clock source.
+
+Example:
+
+rtc: rtc@81009000 {
+	compatible = "renesas,rzt2h-rtc";
+	reg = <0 0x81009000 0 0x70>;
+	interrupts =	<GIC_SPI 495 IRQ_TYPE_EDGE_RISING>,
+			<GIC_SPI 496 IRQ_TYPE_EDGE_RISING>,
+			<GIC_SPI 497 IRQ_TYPE_EDGE_RISING>;
+	interrupt-names = "alarm", "carry", "periodic";
+	status = "disabled";
+};
