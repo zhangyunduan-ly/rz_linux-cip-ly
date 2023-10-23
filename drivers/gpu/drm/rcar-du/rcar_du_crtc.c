@@ -1219,6 +1219,10 @@ rcar_du_crtc_mode_valid(struct drm_crtc *crtc,
 			return MODE_VBLANK_NARROW;
 	}
 
+	if (of_machine_is_compatible("renesas,r9a09g077") &&
+	   (mode->clock > 100000))
+			return MODE_CLOCK_HIGH;
+
 	return MODE_OK;
 }
 
