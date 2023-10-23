@@ -8,6 +8,151 @@
 
 #include "core.h"
 
+#define MACRONIX_NOR_OP_WRITE_CR2		0x72	/* Write Configuration Register 2 */
+#define MACRONIX_NOR_OP_DTR_RD			0xee	/* Octa DTR Read Opcode */
+
+#define MACRONIX_NOR_REG_CR2_MODE_ADDR		0	/* Address of Mode Enable in CR2 */
+#define MACRONIX_NOR_REG_CR2_DTR_OPI_ENABLE	BIT(1)	/* DTR OPI Enable */
+#define MACRONIX_NOR_REG_CR2_SPI		0	/* SPI Enable */
+
+/* Macronix SPI NOR flash operations. */
+#define MACRONIX_NOR_WRITE_CR2_OP(addr, buf, ndata)			\
+	SPI_MEM_OP(SPI_MEM_OP_CMD(MACRONIX_NOR_OP_WRITE_CR2, 0),	\
+		   SPI_MEM_OP_ADDR(4, addr, 0),				\
+		   SPI_MEM_OP_NO_DUMMY,					\
+		   SPI_MEM_OP_DATA_OUT(ndata, buf, 0))
+/* Standard SPI NOR flash operations. */
+#define SPI_NOR_READID_OP(naddr, ndummy, buf, len)			\
+	SPI_MEM_OP(SPI_MEM_OP_CMD(SPINOR_OP_RDID, 0),			\
+		   SPI_MEM_OP_ADDR(naddr, 0, 0),			\
+		   SPI_MEM_OP_DUMMY(ndummy, 0),				\
+		   SPI_MEM_OP_DATA_IN(len, buf, 0))
+
+
+int spi_nor_read_id(struct spi_nor *nor, u8 naddr, u8 ndummy, u8 *id,
+				enum spi_nor_protocol proto)
+{
+	int ret;
+
+	if (nor->spimem) {
+		struct spi_mem_op op =
+		SPI_NOR_READID_OP(naddr, ndummy, id, SPI_NOR_MAX_ID_LEN);
+		spi_nor_spimem_setup_op(nor, &op, proto);
+		ret = spi_mem_exec_op(nor->spimem, &op);
+	} else {
+		ret = nor->controller_ops->read_reg(nor, SPINOR_OP_RDID, id,
+				    SPI_NOR_MAX_ID_LEN);
+	}
+	return ret;
+}
+static int macronix_nor_write_cr2(struct spi_nor *nor, u64 addr, u8 val)
+{
+	u8 *buf = nor->bouncebuf;
+	struct spi_mem_op op;
+	unsigned int nbytes;
+	int ret;
+
+	if (spi_nor_protocol_is_dtr(nor->reg_proto)) {
+		/*
+		 * When the flash is configured in 8D-8D-8D mode, halfwords are
+		 * send/received instead of bytes. One byte transactions are not
+		 * allowed in 8D-8D-8D mode, so we're going to send two bytes to
+		 * the flash to pass the 8D-8D-8D sanity checks. Macronix
+		 * ignores the second byte value in case of a one byte register
+		 * writes, we don't care of the value of the second byte.
+		 * When in 8D-8D-8D mode endianness must be configured according
+		 * to the flash requirements. Macronix swaps data bytes on a
+		 * 16-bit boundary, so the SPI NOR subsystem instructs the SPI
+		 * controllers to swap the bytes back to keep compatibility with
+		 * the STR modes. The swap back is always done regardless if
+		 * it's a register or data access. Since Macronix ignores the
+		 * second byte value on register writes and the SPI controllers
+		 * will swap the bytes, we actually have to set the value on the
+		 * second byte and ignore the first.
+		 */
+		buf[1] = val;
+		nbytes = 2;
+
+	} else {
+		buf[0] = val;
+		nbytes = 1;
+	}
+
+	op = (struct spi_mem_op)MACRONIX_NOR_WRITE_CR2_OP(addr, buf, nbytes);
+	spi_nor_spimem_setup_op(nor, &op, nor->reg_proto);
+	ret = spi_nor_write_enable(nor);
+	if (ret)
+		return ret;
+	return spi_mem_exec_op(nor->spimem, &op);
+}
+
+static int macronix_nor_octal_dtr_en(struct spi_nor *nor)
+{
+	u8 *buf = nor->bouncebuf;
+	int i, ret;
+
+	ret = macronix_nor_write_cr2(nor, MACRONIX_NOR_REG_CR2_MODE_ADDR,
+				     MACRONIX_NOR_REG_CR2_DTR_OPI_ENABLE);
+	if (ret)
+		return ret;
+
+	/* Read flash ID to make sure the switch was successful. */
+	ret = spi_nor_read_id(nor, 4, 4, buf, SNOR_PROTO_8_8_8_DTR);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < nor->info->id_len; i++)
+		if (buf[i * 2] != nor->info->id[i])
+			return -EINVAL;
+	return 0;
+}
+
+static int macronix_nor_octal_dtr_dis(struct spi_nor *nor)
+{
+	u8 *buf = nor->bouncebuf;
+	int ret;
+
+	ret = macronix_nor_write_cr2(nor, MACRONIX_NOR_REG_CR2_MODE_ADDR,
+				     MACRONIX_NOR_REG_CR2_SPI);
+	if (ret)
+		return ret;
+
+	ret = spi_nor_read_id(nor, 0, 0, buf, SNOR_PROTO_1_1_1);
+	if (ret)
+		return ret;
+
+	if (memcmp(buf, nor->info->id, nor->info->id_len)) {
+		dev_dbg(nor->dev, "Failed to disable 8D-8D-8D mode.\n");
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static int macronix_nor_octal_dtr_enable(struct spi_nor *nor, bool enable)
+{
+	return enable ? macronix_nor_octal_dtr_en(nor) :
+			macronix_nor_octal_dtr_dis(nor);
+}
+
+static void mx25uw51245g_late_init(struct spi_nor *nor)
+{
+	nor->params->octal_dtr_enable = macronix_nor_octal_dtr_enable;
+
+	/* Set the Fast Read settings. */
+	nor->params->hwcaps.mask |= SNOR_HWCAPS_READ_8_8_8_DTR;
+	spi_nor_set_read_settings(&nor->params->reads[SNOR_CMD_READ_8_8_8_DTR],
+				  0, 20, MACRONIX_NOR_OP_DTR_RD,
+				  SNOR_PROTO_8_8_8_DTR);
+
+	nor->cmd_ext_type = SPI_NOR_EXT_INVERT;
+	nor->params->rdsr_dummy = 4;
+	nor->params->rdsr_addr_nbytes = 4;
+}
+
+static struct spi_nor_fixups mx25uw51245g_fixups = {
+	.late_init = mx25uw51245g_late_init,
+};
+
 static int
 mx25l25635_post_bfpt_fixups(struct spi_nor *nor,
 			    const struct sfdp_parameter_header *bfpt_header,
@@ -87,7 +232,12 @@ static const struct flash_info macronix_parts[] = {
 			      SECT_4K | SPI_NOR_DUAL_READ |
 			      SPI_NOR_QUAD_READ | SPI_NOR_4B_OPCODES) },
 	{ "mx25uw51245g", INFO(0xc2813a, 0, 64 * 1024, 1024,
-			      SECT_4K | SPI_NOR_4B_OPCODES)},
+			      SPI_NOR_SKIP_SFDP | SECT_4K |
+			      SPI_NOR_OCTAL_DTR_READ | SPI_NOR_OCTAL_DTR_PP |
+			      SPI_NOR_DTR_SWAB16 | SPI_NOR_4B_OPCODES | SPI_NOR_IO_MODE_EN_VOLATILE |
+			      SPI_NOR_SOFT_RESET)
+		.fixups = &mx25uw51245g_fixups,
+	},
 };
 
 static void macronix_default_init(struct spi_nor *nor)
