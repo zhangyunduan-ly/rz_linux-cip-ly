@@ -217,7 +217,8 @@ static int rpcif_spi_probe(struct platform_device *pdev)
 	ctlr->mem_caps = spi_mem_caps;
 
 	ctlr->bits_per_word_mask = SPI_BPW_MASK(8);
-	ctlr->mode_bits = SPI_CPOL | SPI_CPHA | SPI_TX_QUAD | SPI_RX_QUAD |
+	ctlr->mode_bits = SPI_CPOL | SPI_CPHA | SPI_TX_DUAL | SPI_RX_DUAL |
+						SPI_TX_QUAD | SPI_RX_QUAD |
 						SPI_TX_OCTAL | SPI_RX_OCTAL;
 	ctlr->flags = SPI_CONTROLLER_HALF_DUPLEX;
 
