@@ -382,6 +382,10 @@
 	status = "okay";
 };
 
+&rtc {
+	status = "okay";
+};
+
 &usb2_phy {
 	pinctrl-0 = <&usb_pins>;
 	pinctrl-names = "default";
