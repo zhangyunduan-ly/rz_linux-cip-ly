@@ -816,7 +816,7 @@ static int xspi_probe(struct platform_device *pdev)
 	}
 	of_node_put(flash);
 
-	vdev = platform_device_alloc(name, pdev->id);
+	vdev = platform_device_alloc(name, PLATFORM_DEVID_AUTO);
 	if (!vdev)
 		return -ENOMEM;
 	vdev->dev.parent = &pdev->dev;
