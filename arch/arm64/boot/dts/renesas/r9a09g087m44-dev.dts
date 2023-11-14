@@ -248,6 +248,7 @@
 	vmmc-supply = <&reg_3p3v>;
 	vqmmc-supply = <&reg_1p8v>;
 	bus-width = <1>;
+	non-removable;
 	fixed-emmc-driver-type = <1>;
 	status = "okay";
 };
