@@ -16,7 +16,7 @@
  * SEL_SD0 = 0: SDHI
  * SEL_SDO = 1: eMMC (default)
  */
-#define SEL_SD0			0
+#define SEL_SD0			1
 
 /*
  * Set macro SPI2_SEL to 1 to enable SPI2 pins
@@ -247,8 +247,9 @@
 &sdhi0 {
 	vmmc-supply = <&reg_3p3v>;
 	vqmmc-supply = <&reg_1p8v>;
-	bus-width = <1>;
+	bus-width = <8>;
 	non-removable;
+	mmc-hs200-1_8v;
 	fixed-emmc-driver-type = <1>;
 	status = "okay";
 };
