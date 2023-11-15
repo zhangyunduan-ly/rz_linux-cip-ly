@@ -310,7 +310,8 @@ static void rcar_du_crtc_set_display_timing(struct rcar_du_crtc *rcrtc)
 		u32 parallelOut;
 		u32 tableMax;
 
-                if (of_machine_is_compatible("renesas,r9a09g077")) {
+		if (of_machine_is_compatible("renesas,r9a09g077") ||
+		    of_machine_is_compatible("renesas,r9a09g087")) {
 			long long div, res, mult;
 			unsigned int pll_s, pll_m, pll_p, csdiv;
 			short pll_k;
@@ -1219,7 +1220,8 @@ rcar_du_crtc_mode_valid(struct drm_crtc *crtc,
 			return MODE_VBLANK_NARROW;
 	}
 
-	if (of_machine_is_compatible("renesas,r9a09g077") &&
+	if ((of_machine_is_compatible("renesas,r9a09g077") ||
+	     of_machine_is_compatible("renesas,r9a09g087")) &&
 	   (mode->clock > 100000))
 			return MODE_CLOCK_HIGH;
 
