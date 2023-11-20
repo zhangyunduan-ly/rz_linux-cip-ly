@@ -802,6 +802,7 @@ static const struct soc_device_attribute rzg2l_match[] = {
 	{ .family = "RZ/V2L" },
 	{ .family = "RZ/G2UL" },
 	{ .family = "RZ/T2H" },
+	{ .family = "RZ/N2H" },
 	{ /* sentinel*/ }
 };
 
