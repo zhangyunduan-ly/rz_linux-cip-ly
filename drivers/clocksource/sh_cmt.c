@@ -1100,7 +1100,15 @@ static const struct of_device_id sh_cmt_of_table[] __maybe_unused = {
 		.data = &sh_cmt_info[SH_CMT_T2H]
 	},
 	{
+		.compatible = "renesas,n2h-cmt",
+		.data = &sh_cmt_info[SH_CMT_T2H]
+	},
+	{
 		.compatible = "renesas,t2h-cmtw",
+		.data = &sh_cmt_info[SH_CMTW_T2H]
+	},
+	{
+		.compatible = "renesas,n2h-cmtw",
 		.data = &sh_cmt_info[SH_CMTW_T2H]
 	},
 	{ }
