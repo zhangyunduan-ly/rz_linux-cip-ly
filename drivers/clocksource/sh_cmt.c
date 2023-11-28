@@ -1173,8 +1173,7 @@ static int sh_cmt_setup(struct sh_cmt_device *cmt, struct platform_device *pdev)
 	 */
 	for (i = 0, mask = cmt->hw_channels; i < cmt->num_channels; ++i) {
 		unsigned int hwidx = ffs(mask) - 1;
-		/* If device lack of status bit and if only one channel is available use it as a clock event */
-		bool clocksource = i == 1 || ( cmt->num_channels == 1 && cmt->info->overflow_bit != 0 );
+		bool clocksource = i == 1 || cmt->num_channels == 1;
 		bool clockevent = i == 0;
 
 		ret = sh_cmt_setup_channel(&cmt->channels[i], i, hwidx,
