@@ -630,6 +630,8 @@
 			clocks = <&cpg CPG_MOD R9A09G077_SPI1_CLK>;
 			power-domains = <&cpg>;
 			num-cs = <1>;
+			dmas = <&dmac0 0x2680>, <&dmac0 0x267F>;
+			dma-names = "tx", "rx";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
@@ -643,6 +645,24 @@
 				     <GIC_SPI 647 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "rx", "tx", "error";
 			clocks = <&cpg CPG_MOD R9A09G077_SPI2_CLK>;
+			power-domains = <&cpg>;
+			num-cs = <1>;
+			dmas = <&dmac0 0x2685>, <&dmac0 0x2684>;
+			dma-names = "tx", "rx";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		spi3: spi@81007000 {
+			compatible = "renesas,rspi-n2h",
+				     "renesas,rspi-t2h";
+			reg = <0 0x81007000 0 0x100>;
+			interrupts = <GIC_SPI 649 IRQ_TYPE_EDGE_RISING>,
+				     <GIC_SPI 650 IRQ_TYPE_EDGE_RISING>,
+				     <GIC_SPI 652 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "rx", "tx", "error";
+			clocks = <&cpg CPG_MOD R9A09G077_SPI3_CLK>;
 			power-domains = <&cpg>;
 			num-cs = <1>;
 			#address-cells = <1>;
