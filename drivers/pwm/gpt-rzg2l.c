@@ -62,11 +62,13 @@
 #define TRIANGLE_WAVE_MODE3	(0x06<<16)
 #define GTCR_MODE_MASK		(0x7<<16)
 #define GTCR_PRESCALE_MASK	(0x7<<24)
+#define GTIOR_OBE		BIT(24)
 #define GTIOR_CHANNEL_B_OUTPUT_MASK	(0x01FF<<16)
 #define GTIOB_OUTPUT_HIGH_END_TOGGLE_COMPARE	(0x11B<<16)
 #define GTIOB_OUTPUT_LOW_END_TOGGLE_COMPARE	(0x147<<16)
 /* GTIOR.GTIOB = 11001 */
 /* GTIOR.OBE = 1 */
+#define GTIOR_OAE				BIT(8)
 #define GTIOR_CHANNEL_A_OUTPUT_MASK	0x01FF
 #define GTIOA_OUTPUT_HIGH_END_TOGGLE_COMPARE	0x11B
 #define GTIOA_OUTPUT_LOW_END_TOGGLE_COMPARE	0x147
@@ -125,6 +127,52 @@
 
 #define NR_GPT_OPERATION	6
 
+#define RZT2H_GTCR_PRESCALE_MASK		GENMASK(26, 23)
+#define RZT2H_P0_1024				(0x0a << 23)
+#define RZT2H_INT_CCMPA				(1 << 0)
+#define RZT2H_INT_CCMPB				(1 << 1)
+#define RZT2H_INT_OVF				(1 << 6)
+#define RZT2H_NS_INTMSK_OFFSET			0x900
+#define RZT2H_NS_INTCLR_OFFSET			0x9e0
+#define RZT2H_NS_INTSTAT_OFFSET			0xac0
+#define RZT2H_S_INTMSK_OFFSET			0x030
+#define RZT2H_S_INTCLR_OFFSET			0x038
+#define RZT2H_S_INTSTAT_OFFSET			0x040
+
+enum rz_board {
+	RZG2L,
+	RZT2H
+};
+
+struct rz_gpt_data_cfg {
+	u32 prescale_mask;	/* Mask of prescaler */
+	u32 prescale;		/* Core clock divide */
+	int *prescale_arr;	/* Array Clock Divide */
+	int n_prescale;		/* Related to number of prescale */
+	int board;
+};
+
+unsigned int rzg2l_prescale_arr[] = {1, 4, 16, 64, 256, 1024};
+unsigned int rzt2h_prescale_arr[] = {1, 2, 4, 8, 16, 32, 64, 64, 256, 256, 1024};
+
+
+
+static const struct rz_gpt_data_cfg rzg2l_cfg = {
+	GTCR_PRESCALE_MASK,
+	P0_1024,
+	rzg2l_prescale_arr,
+	ARRAY_SIZE(rzg2l_prescale_arr),
+	RZG2L,
+};
+
+static const struct rz_gpt_data_cfg rzt2h_cfg = {
+	RZT2H_GTCR_PRESCALE_MASK,
+	RZT2H_P0_1024,
+	rzt2h_prescale_arr,
+	ARRAY_SIZE(rzt2h_prescale_arr),
+	RZT2H,
+};
+
 static const char *const gpt_operation_enum[] = {
 	"normal_output",
 	"single_buffer_output",
@@ -141,6 +189,12 @@ enum {
 	DEADTIME_OUTPUT,
 	INPUT_CAPTURE,
 	COUNTING_INPUT,
+};
+
+static const char *const gpt_channel_enum[] = {
+	"channel_A",
+	"channel_B",
+	"both_AB",
 };
 
 enum {
@@ -176,10 +230,10 @@ static const struct set_params channel_set[NR_CHANNEL] = {
 	[CHANNEL_A] = {
 		.phase = {
 			.polar = {
-				GTIOA_OUTPUT_HIGH_END_TOGGLE_COMPARE,
-				GTIOA_OUTPUT_LOW_END_TOGGLE_COMPARE,
+				GTIOA_OUTPUT_HIGH_END_TOGGLE_COMPARE & ~GTIOR_OBE,
+				GTIOA_OUTPUT_LOW_END_TOGGLE_COMPARE & ~GTIOR_OBE,
 			},
-			GTIOR_CHANNEL_A_OUTPUT_MASK,
+			GTIOR_CHANNEL_A_OUTPUT_MASK | GTIOR_OBE,
 			GTIOR,
 		},
 		.duty = {
@@ -213,10 +267,10 @@ static const struct set_params channel_set[NR_CHANNEL] = {
 	[CHANNEL_B] = {
 		.phase = {
 			.polar = {
-				GTIOB_OUTPUT_HIGH_END_TOGGLE_COMPARE,
-				GTIOB_OUTPUT_LOW_END_TOGGLE_COMPARE,
+				GTIOB_OUTPUT_HIGH_END_TOGGLE_COMPARE & ~GTIOR_OAE,
+				GTIOB_OUTPUT_LOW_END_TOGGLE_COMPARE & ~GTIOR_OAE,
 			},
-			GTIOR_CHANNEL_B_OUTPUT_MASK,
+			GTIOR_CHANNEL_B_OUTPUT_MASK | GTIOR_OAE,
 			GTIOR,
 		},
 		.duty = {
@@ -330,10 +384,16 @@ struct rzg2l_gpt_chip {
 	struct	pwm_chip chip;
 	struct	clk *clk;
 	void	__iomem *mmio_base;
+	void	__iomem *int_base;
+	int	int_offset;
+	long	intmsk_offset;
+	long	intclr_offset;
+	long	intstat_offset;
 	spinlock_t lock;
 	struct reset_control *rstc;
 	wait_queue_head_t wait;
 	struct mutex mutex;
+	const struct rz_gpt_data_cfg *cfg;
 	u64 snapshot[3];
 	unsigned int index;
 	unsigned int overflow_count, buffer_mode_count_A, buffer_mode_count_B;
@@ -395,6 +455,7 @@ static u32 rzg2l_gpt_read_mask(struct rzg2l_gpt_chip *pc, u32 mask,
 static int rzg2l_calculate_prescale(struct rzg2l_gpt_chip *pc,
 						int period_ns)
 {
+	int *ps_arr = pc->cfg->prescale_arr;
 	unsigned long long c, clk_rate;
 	unsigned long period_cycles;
 	int prescale;
@@ -406,31 +467,18 @@ static int rzg2l_calculate_prescale(struct rzg2l_gpt_chip *pc,
 	period_cycles = c;
 	if (period_cycles < 1)
 		period_cycles = 1;
-	/* prescale 1,4,16,64 */
-	/* 1 Dividing */
-	if ((period_cycles / GTPR_MAX_VALUE) == 0) {
-		prescale = 0;
-	/* 4 Dividing */
-	} else if ((period_cycles / (GTPR_MAX_VALUE * 4)) == 0) {
-		prescale = 1;
-	/* 16 Dividing */
-	} else if ((period_cycles / (GTPR_MAX_VALUE * 16)) == 0) {
-		prescale = 2;
-	/* 64 Dividing */
-	} else if ((period_cycles / (GTPR_MAX_VALUE * 64)) == 0) {
-		prescale = 3;
-	/* 256 Dividing */
-	} else if ((period_cycles / (GTPR_MAX_VALUE * 256)) == 0) {
-		prescale = 4;
-	/* 1024 Dividing */
-	} else if ((period_cycles / (GTPR_MAX_VALUE * 1024)) == 0) {
-		prescale = 5;
-	} else {
-		dev_err(pc->chip.dev, "gpt-rzg2l prescale over!!\n");
-		return -1;
+
+	for (prescale = 0; prescale <= pc->cfg->n_prescale; prescale++) {
+		if (prescale == pc->cfg->n_prescale)
+			break;
+
+		if (period_cycles / (GTPR_MAX_VALUE * ps_arr[prescale]) == 0)
+			return prescale;
 	}
 
-	return prescale;
+	dev_err(pc->chip.dev, "gpt prescale over!!\n");
+	return -1;
+
 }
 
 static unsigned long
@@ -448,26 +496,7 @@ rzg2l_time_to_tick_number(struct rzg2l_gpt_chip *pc, int time_ns,
 	if (period_cycles < 1)
 		period_cycles = 1;
 
-	switch (prescale) {
-	case 0:
-		period_cycles /= 1;
-		break;
-	case 1:
-		period_cycles /= 4;
-		break;
-	case 2:
-		period_cycles /= 16;
-		break;
-	case 3:
-		period_cycles /= 64;
-		break;
-	case 4:
-		period_cycles /= 256;
-		break;
-	case 5:
-		period_cycles /= 1024;
-		break;
-	}
+	period_cycles = period_cycles / pc->cfg->prescale_arr[prescale];
 
 	return period_cycles;
 }
@@ -483,26 +512,7 @@ rzg2l_tick_number_to_time(struct rzg2l_gpt_chip *pc, u32 tick_number,
 	do_div(c, clk_rate);
 	time_ns = c;
 
-	switch (prescale) {
-	case 0:
-		time_ns *= 1;
-		break;
-	case 1:
-		time_ns *= 4;
-		break;
-	case 2:
-		time_ns *= 16;
-		break;
-	case 3:
-		time_ns *= 64;
-		break;
-	case 4:
-		time_ns *= 256;
-		break;
-	case 5:
-		time_ns *= 1024;
-		break;
-	}
+	time_ns = time_ns * pc->cfg->prescale_arr[prescale];
 
 	return time_ns;
 }
@@ -567,6 +577,7 @@ static int rzg2l_gpt_config(struct pwm_chip *chip, struct pwm_device *pwm,
 				int duty_ns, int period_ns)
 {
 	struct rzg2l_gpt_chip *pc = to_rzg2l_gpt_chip(chip);
+	u32 prescale_mask = pc->cfg->prescale_mask;
 	unsigned long pv, dc;
 	int prescale;
 
@@ -577,11 +588,6 @@ static int rzg2l_gpt_config(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	if ((duty_ns < 0) || (period_ns < 0)) {
 		dev_err(chip->dev, "Set time negative\n");
-		return -EINVAL;
-	}
-
-	if ((duty_ns > 0) && (pc->channel == BOTH_AB)) {
-		dev_err(chip->dev, "In both channel A and B output please set duty cycle via buff\n");
 		return -EINVAL;
 	}
 
@@ -602,7 +608,8 @@ static int rzg2l_gpt_config(struct pwm_chip *chip, struct pwm_device *pwm,
 		rzg2l_gpt_write_mask(pc, SAW_WAVE, GTCR_MODE_MASK, GTCR);
 
 	/* Set prescale for GPT */
-	rzg2l_gpt_write_mask(pc, (prescale<<24), GTCR_PRESCALE_MASK, GTCR);
+	rzg2l_gpt_write_mask(pc, prescale << (ffs(prescale_mask) - 1),
+						prescale_mask, GTCR);
 	/* Set counting mode */
 	rzg2l_gpt_write(pc, UP_COUNTING, GTUDDTYC); //up-counting
 	/* Set period */
@@ -621,11 +628,16 @@ static int rzg2l_gpt_config(struct pwm_chip *chip, struct pwm_device *pwm,
 				GTINTPROV, GTINTAD_GTINTPR_MASK, GTINTAD);
 	}
 
-	/* Set duty cycle */
-	rzg2l_gpt_write(pc, dc, channel_set[pc->channel].duty.offset);
-
 	/* Set initial value for counter */
 	rzg2l_gpt_write(pc, 0, GTCNT); // reset counter value
+
+	if ((duty_ns > 0) && (pc->channel == BOTH_AB)) {
+		dev_err(chip->dev, "In both channel A and B output please set duty cycle via buff\n");
+		return -EINVAL;
+	}
+
+	/* Set duty cycle */
+	rzg2l_gpt_write(pc, dc, channel_set[pc->channel].duty.offset);
 
 	return 0;
 }
@@ -676,7 +688,7 @@ rzg2l_gpt_capture(struct pwm_chip *chip, struct pwm_device *pwm,
 	/* Prepare capture measurement */
 	/* Set operating mode GTCR.MD[2:0] and count clock GTCR.TPCS[2:0]*/
 	//Using lowest frequency P0/1024 to avoid overflow
-	rzg2l_gpt_write(pc, SAW_WAVE|P0_1024, GTCR);
+	rzg2l_gpt_write(pc, SAW_WAVE | pc->cfg->prescale, GTCR);
 	/* Set count direction with GTUDDTYC[1:0]*/
 	rzg2l_gpt_write(pc, UP_COUNTING, GTUDDTYC); //up-counting
 	/* Set cycle in GTPR */
@@ -720,9 +732,9 @@ rzg2l_gpt_capture(struct pwm_chip *chip, struct pwm_device *pwm,
 		high = pc->snapshot[1] - pc->snapshot[0];
 		low = pc->snapshot[2] - pc->snapshot[1];
 		effective_ticks = clk_get_rate(pc->clk)/1024;
-		result->period = (high + low) * MSEC_PER_SEC;
+		result->period = (high + low) * USEC_PER_SEC;
 		result->period /= effective_ticks;
-		result->duty_cycle = high * MSEC_PER_SEC;
+		result->duty_cycle = high * USEC_PER_SEC;
 		result->duty_cycle /= effective_ticks;
 		break;
 	default:
@@ -1118,6 +1130,157 @@ static const struct iio_chan_spec rzg2l_gpt_cnt_channels = {
 	.ext_info = rzg2l_gpt_cnt_ext_info,
 	.indexed = 1,
 };
+
+static irqreturn_t rzt2h_gpt_isr(int irq, void *data)
+{
+	struct rzg2l_gpt_chip *pc = data;
+	int ret = IRQ_NONE;
+	uint32_t irq_flags;
+	unsigned long flags;
+	uint32_t tmp;
+
+	spin_lock_irqsave(&pc->lock, flags);
+
+	irq_flags = readw(pc->int_base + pc->intstat_offset + 0x02 * pc->int_offset);
+	if (irq_flags & RZT2H_INT_OVF) {
+		pc->overflow_count++;
+		pc->buffer_mode_count_A--;
+		pc->buffer_mode_count_B--;
+
+		tmp = rzg2l_gpt_read(pc, GTBER);
+
+		if (tmp & GTCCRB_BUFFER_SINGLE) {
+			rzg2l_gpt_write(pc,
+				pc->bufferB[pc->buffer_mode_count_B],
+				GTCCRE);
+			if (pc->buffer_mode_count_B == 0)
+				pc->buffer_mode_count_B = 2;
+		}
+
+		if (tmp & GTCCRB_BUFFER_DOUBLE) {
+			rzg2l_gpt_write(pc,
+				pc->bufferB[pc->buffer_mode_count_B],
+				GTCCRF);
+			if (pc->buffer_mode_count_B == 0)
+				pc->buffer_mode_count_B = 3;
+		}
+
+		if (tmp & GTCCRA_BUFFER_SINGLE) {
+			rzg2l_gpt_write(pc,
+				pc->bufferA[pc->buffer_mode_count_A],
+				GTCCRC);
+			if (pc->buffer_mode_count_A == 0)
+				pc->buffer_mode_count_A = 2;
+		}
+
+		if (tmp & GTCCRA_BUFFER_DOUBLE) {
+			rzg2l_gpt_write(pc,
+				pc->bufferA[pc->buffer_mode_count_A],
+				GTCCRD);
+			if (pc->buffer_mode_count_A == 0)
+				pc->buffer_mode_count_A = 3;
+		}
+
+#if IS_BUILTIN(CONFIG_POEG_RZG2L)
+		if (pc->poeg) {
+			/*Clear input edge flag*/
+			rzg2l_poeg_clear_bit_export(POEG_mode_set[pc->poeg].poeg_dev, PIDF, POEGG);
+			/*Clear GPT disable flag*/
+			rzg2l_poeg_clear_bit_export(POEG_mode_set[pc->poeg].poeg_dev, IOCF, POEGG);
+
+		}
+#endif
+
+		if (pc->gpt_operation == DEADTIME_OUTPUT) {
+			rzg2l_gpt_write(pc, pc->bufferA[1], GTCCRC);
+			rzg2l_gpt_write(pc, pc->bufferA[2], GTCCRD);
+		}
+
+		if (pc->pulse_number) {
+			pc->pulse_number--;
+			if (!pc->pulse_number) {
+				/* Stop count */
+				rzg2l_gpt_write_mask(pc, 0, GTCR_CST, GTCR);
+				rzg2l_gpt_write(pc, 0, GTCNT);
+				pc->chip.pwms[0].state.enabled = 0;
+				if ((!pc->poeg) &&
+					(pc->gpt_operation == NORMAL_OUTPUT))
+					rzg2l_gpt_write_mask(pc, 0,
+						GTINTAD_GTINTPR_MASK, GTINTAD);
+			}
+		}
+
+		/* Disable overflow interrupt flags */
+		writew(RZT2H_INT_OVF, pc->int_base + pc->intclr_offset
+						+ 0x02 * pc->int_offset);
+		ret = IRQ_HANDLED;
+	}
+
+	if (irq_flags & RZT2H_INT_CCMPA) {
+		pc->snapshot[pc->index] = rzg2l_gpt_read(pc, GTCCRA) +
+			(pc->overflow_count) * GTPR_MAX_VALUE;
+		switch (pc->index) {
+		case 0:
+		case 1:
+			tmp = rzg2l_gpt_read(pc, GTICASR);
+			if (tmp & INPUT_CAP_GTIOA_RISING_EDGE)
+				rzg2l_gpt_write(pc,
+				INPUT_CAP_GTIOA_FALLING_EDGE, GTICASR);
+			if (tmp & INPUT_CAP_GTIOA_FALLING_EDGE)
+				rzg2l_gpt_write(pc, INPUT_CAP_GTIOA_RISING_EDGE,
+						GTICASR);
+			pc->index++;
+			break;
+		case 2:
+			/* Disable capture operation */
+			rzg2l_gpt_write(pc, 0, GTICASR);
+			wake_up(&pc->wait);
+			break;
+		default:
+			dev_err(pc->chip.dev, "Internal error\n");
+		}
+
+		/* Disable input capture interrupt flags */
+		writew(RZT2H_INT_CCMPA, pc->int_base + pc->intclr_offset
+						+ 0x02 * pc->int_offset);
+		ret = IRQ_HANDLED;
+	}
+
+	if (irq_flags & RZT2H_INT_CCMPB) {
+		pc->snapshot[pc->index] = rzg2l_gpt_read(pc, GTCCRB) +
+			(pc->overflow_count) * GTPR_MAX_VALUE;
+		switch (pc->index) {
+		case 0:
+		case 1:
+			tmp = rzg2l_gpt_read(pc, GTICBSR);
+			if (tmp & INPUT_CAP_GTIOB_RISING_EDGE)
+				rzg2l_gpt_write(pc,
+					INPUT_CAP_GTIOB_FALLING_EDGE, GTICBSR);
+			if (tmp & INPUT_CAP_GTIOB_FALLING_EDGE)
+				rzg2l_gpt_write(pc, INPUT_CAP_GTIOB_RISING_EDGE,
+						GTICBSR);
+			pc->index++;
+			break;
+		case 2:
+			/* Disable capture operation */
+			rzg2l_gpt_write(pc, 0, GTICBSR);
+			wake_up(&pc->wait);
+			break;
+		default:
+			dev_err(pc->chip.dev, "Internal error\n");
+		}
+
+		 /* Disable input capture interrupt flags */
+		writew(RZT2H_INT_CCMPA, pc->int_base + pc->intclr_offset
+						+ 0x02 * pc->int_offset);
+		ret = IRQ_HANDLED;
+	}
+
+	spin_unlock_irqrestore(&pc->lock, flags);
+
+	return ret;
+}
+
 
 static irqreturn_t gpt_gtciv_interrupt(int irq, void *data)
 {
@@ -1723,7 +1886,7 @@ static ssize_t polarityA_store(struct device *dev,
 	}
 
 	rzg2l_gpt_write_mask(pc,
-	channel_set[CHANNEL_A].phase.polar[pc->channel_polar[CHANNEL_A]],
+	channel_set[CHANNEL_A].phase.polar[pc->channel_polar[CHANNEL_A]] | GTIOR_OBE,
 	channel_set[CHANNEL_A].phase.mask, GTIOR);
 
 	mutex_unlock(&pc->mutex);
@@ -1774,7 +1937,7 @@ static ssize_t polarityB_store(struct device *dev,
 	}
 
 	rzg2l_gpt_write_mask(pc,
-	channel_set[CHANNEL_B].phase.polar[pc->channel_polar[CHANNEL_B]],
+	channel_set[CHANNEL_B].phase.polar[pc->channel_polar[CHANNEL_B]] | GTIOR_OAE,
 	channel_set[CHANNEL_B].phase.mask, GTIOR);
 
 	mutex_unlock(&pc->mutex);
@@ -1919,6 +2082,59 @@ static ssize_t deadtime_second_show(struct device *dev,
 	return sprintf(buf, "%llu\n", time_ns);
 }
 
+static ssize_t gpt_channel_available_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	unsigned int i;
+	size_t len = 0;
+
+	for (i = 0; i < NR_CHANNEL; i++)
+		len += sysfs_emit_at(buf, len, "%s ", gpt_channel_enum[i]);
+
+	/* replace last space with a newline */
+	buf[len - 1] = '\n';
+
+	return len;
+}
+
+static ssize_t gpt_channel_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct rzg2l_gpt_chip *pc = platform_get_drvdata(pdev);
+	int ret;
+
+	if (!pc->enable_clock) {
+		dev_err(pc->chip.dev, "Please export pwm module to enable clock first\n");
+		return -EINVAL;
+	}
+
+	ret = sysfs_match_string(gpt_channel_enum, buf);
+	if (ret < 0)
+		return ret;
+
+	mutex_lock(&pc->mutex);
+
+	pc->channel = ret;
+	/* Enablei/disable pin output */
+	rzg2l_gpt_write_mask(pc,
+	channel_set[pc->channel].phase.polar[pc->channel_polar[pc->channel]],
+	channel_set[pc->channel].phase.mask, GTIOR);
+
+	mutex_unlock(&pc->mutex);
+
+	return count;
+}
+
+static ssize_t gpt_channel_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct rzg2l_gpt_chip *pc = platform_get_drvdata(pdev);
+
+	return sysfs_emit(buf, "%s\n", gpt_channel_enum[pc->channel]);
+}
+
 static ssize_t gpt_operation_available_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1939,6 +2155,7 @@ static ssize_t gpt_operation_store(struct device *dev,
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct rzg2l_gpt_chip *pc = platform_get_drvdata(pdev);
+	const struct rz_gpt_data_cfg *dreg = pc->cfg;
 	int ret;
 
 	if (!pc->enable_clock) {
@@ -2007,7 +2224,7 @@ static ssize_t gpt_operation_store(struct device *dev,
 		/* Saw wave mode */
 		rzg2l_gpt_write_mask(pc, SAW_WAVE, GTCR_MODE_MASK, GTCR);
 		/* Maximum frequency*/
-		rzg2l_gpt_write_mask(pc, 0, GTCR_PRESCALE_MASK, GTCR);
+		rzg2l_gpt_write_mask(pc, 0, dreg->prescale_mask, GTCR);
 		/* Default period */
 		rzg2l_gpt_write(pc, GTPR_MAX_VALUE, GTPR);
 		/* Set initial value for counter */
@@ -2170,6 +2387,8 @@ static DEVICE_ATTR_RW(polarityA);
 static DEVICE_ATTR_RW(polarityB);
 static DEVICE_ATTR_RW(deadtime_first);
 static DEVICE_ATTR_RW(deadtime_second);
+static DEVICE_ATTR_RO(gpt_channel_available);
+static DEVICE_ATTR_RW(gpt_channel);
 static DEVICE_ATTR_RO(gpt_operation_available);
 static DEVICE_ATTR_RW(gpt_operation);
 static DEVICE_ATTR_RO(POEG_available);
@@ -2187,6 +2406,8 @@ static struct attribute *buffer_attrs[] = {
 	&dev_attr_polarityB.attr,
 	&dev_attr_deadtime_first.attr,
 	&dev_attr_deadtime_second.attr,
+	&dev_attr_gpt_channel_available.attr,
+	&dev_attr_gpt_channel.attr,
 	&dev_attr_gpt_operation_available.attr,
 	&dev_attr_gpt_operation.attr,
 	&dev_attr_POEG_available.attr,
@@ -2208,6 +2429,9 @@ static int rzg2l_gpt_probe(struct platform_device *pdev)
 	struct iio_dev *indio_dev;
 	int ret, irq = 0, i, j;
 	const char *read_string;
+	char gpt_idx_major_str[3];
+	long gpt_idx_major;
+	long gpt_idx_minor;
 
 	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*rzg2l_gpt));
 	if (!indio_dev)
@@ -2215,6 +2439,7 @@ static int rzg2l_gpt_probe(struct platform_device *pdev)
 
 	rzg2l_gpt = iio_priv(indio_dev);
 
+	rzg2l_gpt->cfg = of_device_get_match_data(&pdev->dev);
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (res == NULL) {
 		dev_err(&pdev->dev, "No memory resource defined\n");
@@ -2276,51 +2501,118 @@ static int rzg2l_gpt_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	rzg2l_gpt->rstc = devm_reset_control_get_shared(&pdev->dev, NULL);
-	if (IS_ERR(rzg2l_gpt->rstc)) {
-		dev_err(&pdev->dev, "failed to get cpg reset\n");
-		return PTR_ERR(rzg2l_gpt->rstc);
+	if (rzg2l_gpt->cfg->board == RZG2L) {
+		rzg2l_gpt->rstc = devm_reset_control_get_shared(&pdev->dev, NULL);
+		if (IS_ERR(rzg2l_gpt->rstc)) {
+			dev_err(&pdev->dev, "failed to get cpg reset\n");
+			return PTR_ERR(rzg2l_gpt->rstc);
+		}
+
+		reset_control_deassert(rzg2l_gpt->rstc);
+
+		irq = platform_get_irq_byname(pdev, "gtcib");
+		if (irq < 0) {
+			dev_err(&pdev->dev, "Failed to obtain IRQ\n");
+			return irq;
+		}
+
+		ret = devm_request_irq(&pdev->dev, irq, gpt_gtcib_interrupt, 0,
+					dev_name(&pdev->dev), rzg2l_gpt);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to request IRQ\n");
+			return ret;
+		}
+
+		irq = platform_get_irq_byname(pdev, "gtcia");
+		if (irq < 0) {
+			dev_err(&pdev->dev, "Failed to obtain IRQ\n");
+			return irq;
+		}
+
+		ret = devm_request_irq(&pdev->dev, irq, gpt_gtcia_interrupt, 0,
+					dev_name(&pdev->dev), rzg2l_gpt);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to request IRQ\n");
+			return ret;
+		}
+
+		irq = platform_get_irq_byname(pdev, "gtciv");
+		if (irq < 0) {
+			dev_err(&pdev->dev, "Failed to obtain IRQ\n");
+			return irq;
+		}
+
+		ret = devm_request_irq(&pdev->dev, irq, gpt_gtciv_interrupt, 0,
+					dev_name(&pdev->dev), rzg2l_gpt);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to request IRQ\n");
+			return ret;
+		}
 	}
 
-	reset_control_deassert(rzg2l_gpt->rstc);
+	if (rzg2l_gpt->cfg->board == RZT2H) {
+		strlcpy(gpt_idx_major_str, &pdev->dev.of_node->name[3], 3);
+		ret = kstrtol(gpt_idx_major_str, 10, &gpt_idx_major);
+		if (ret != 0)
+			return -EINVAL;
 
-	irq = platform_get_irq_byname(pdev, "gtcib");
-	if (irq < 0) {
-		dev_err(&pdev->dev, "Failed to obtain IRQ\n");
-		return irq;
-	}
+		ret = kstrtol(&pdev->dev.of_node->name[6], 10, &gpt_idx_minor);
+		if (ret != 0)
+			return -EINVAL;
 
-	ret = devm_request_irq(&pdev->dev, irq, gpt_gtcib_interrupt, 0,
-				dev_name(&pdev->dev), rzg2l_gpt);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Failed to request IRQ\n");
-		return ret;
-	}
+		if (0 <= gpt_idx_major && 9 >= gpt_idx_major) {
+			rzg2l_gpt->int_offset = 5 * gpt_idx_major
+								+ gpt_idx_minor;
+			rzg2l_gpt->intmsk_offset = RZT2H_NS_INTMSK_OFFSET;
+			rzg2l_gpt->intclr_offset = RZT2H_NS_INTCLR_OFFSET;
+			rzg2l_gpt->intstat_offset = RZT2H_NS_INTSTAT_OFFSET;
+			res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+								 "ns_int_base");
+			if (!res) {
+				dev_err(&pdev->dev, "missing IO resource\n");
+				return -ENXIO;
+			}
 
-	irq = platform_get_irq_byname(pdev, "gtcia");
-	if (irq < 0) {
-		dev_err(&pdev->dev, "Failed to obtain IRQ\n");
-		return irq;
-	}
+			rzg2l_gpt->int_base = ioremap(res->start,
+							resource_size(res));
+		} else if (gpt_idx_major == 10) {
+			rzg2l_gpt->int_offset = gpt_idx_minor;
+			rzg2l_gpt->intmsk_offset = RZT2H_S_INTMSK_OFFSET;
+			rzg2l_gpt->intclr_offset = RZT2H_S_INTCLR_OFFSET;
+			rzg2l_gpt->intstat_offset = RZT2H_S_INTSTAT_OFFSET;
+			res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+								"s_int_base");
+			if (!res) {
+				dev_err(&pdev->dev, "missing IO resource\n");
+				return -ENXIO;
+			}
 
-	ret = devm_request_irq(&pdev->dev, irq, gpt_gtcia_interrupt, 0,
-				dev_name(&pdev->dev), rzg2l_gpt);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Failed to request IRQ\n");
-		return ret;
-	}
+			rzg2l_gpt->int_base = ioremap(res->start,
+							resource_size(res));
+		}
 
-	irq = platform_get_irq_byname(pdev, "gtciv");
-	if (irq < 0) {
-		dev_err(&pdev->dev, "Failed to obtain IRQ\n");
-		return irq;
-	}
+		if (IS_ERR(rzg2l_gpt->int_base)) {
+			dev_err(&pdev->dev, "Failed to request ioremap\n");
+			return PTR_ERR(rzg2l_gpt->int_base);
+		}
 
-	ret = devm_request_irq(&pdev->dev, irq, gpt_gtciv_interrupt, 0,
-				dev_name(&pdev->dev), rzg2l_gpt);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Failed to request IRQ\n");
-		return ret;
+		writew(readw(rzg2l_gpt->int_base + rzg2l_gpt->intmsk_offset
+						+ 0x02 * rzg2l_gpt->int_offset)
+			& ~(RZT2H_INT_OVF | RZT2H_INT_CCMPA | RZT2H_INT_CCMPB),
+			rzg2l_gpt->int_base + rzg2l_gpt->intmsk_offset
+					+ 0x02 * rzg2l_gpt->int_offset);
+		irq = platform_get_irq_byname(pdev, "int4");
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to obtain IRQ\n");
+			return irq;
+		}
+
+		ret = devm_request_irq(&pdev->dev, irq, rzt2h_gpt_isr, 0,
+					dev_name(&pdev->dev), rzg2l_gpt);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to request IRQ\n");
+			return ret;
+		}
 	}
 
 	ret = of_property_read_string(pdev->dev.of_node, "channel",
@@ -2389,7 +2681,8 @@ static int rzg2l_gpt_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id rzg2l_gpt_of_table[] = {
-	{ .compatible = "renesas,gpt-r9a07g044", },
+	{ .compatible = "renesas,gpt-r9a07g044", .data = &rzg2l_cfg, },
+	{ .compatible = "renesas,gpt-r9a09g077", .data = &rzt2h_cfg, },
 	{ },
 };
 
