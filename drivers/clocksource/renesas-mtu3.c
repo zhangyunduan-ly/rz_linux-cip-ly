@@ -84,6 +84,7 @@ struct renesas_mtu3_device {
 	bool has_clocksource;
 	struct pwm_chip pwm_chip;
 	struct mtu3_pwm_device *pwms;
+	bool is_rzt2h;
 };
 
 /* 8-bit shared register offsets macros */
@@ -1960,10 +1961,17 @@ skip_allocate_mtu_pointer:
 
 	mtu->rstc = devm_reset_control_get(&pdev->dev, NULL);
 
-	if (IS_ERR(mtu->rstc))
-		dev_warn(&pdev->dev, "failed to get cpg reset\n");
+	if (of_device_is_compatible(np, "renesas,r9a09g077-mtu3"))
+		mtu->is_rzt2h = true;
 	else
-		reset_control_deassert(mtu->rstc);
+		mtu->is_rzt2h = false;
+
+	if (!mtu->is_rzt2h) {
+		if (IS_ERR(mtu->rstc))
+			dev_warn(&pdev->dev, "failed to get cpg reset\n");
+		else
+			reset_control_deassert(mtu->rstc);
+	}
 
 	/* Get hold of clock. */
 	mtu->clk = clk_get(&mtu->pdev->dev, "fck");
@@ -2109,6 +2117,7 @@ static int renesas_mtu3_remove(struct platform_device *pdev)
 
 static const struct of_device_id renesas_mtu3_of_table[] = {
 	{ .compatible = "renesas,mtu3" },
+	{ .compatible = "renesas,r9a09g077-mtu3" },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, renesas_mtu3_of_table);
