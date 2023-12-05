@@ -26,6 +26,13 @@
  */
 #define SPI2_SEL		0
 
+/*
+ * Set SEL_ADC to 1 to enable ADC pins due to pins conflict between ADC and ETH3:
+ * - 0: ETH3 (default)
+ * - 1: ADC
+ */
+#define SEL_ADC			0
+
 / {
 	model = "Renesas Development EVK based on r9a09g087m44";
 	compatible = "renesas,r9a09g087m44-dev", "renesas,r9a09g087m44", "renesas,r9a09g087";
@@ -196,12 +203,26 @@
 			 <RZT2H_PORT_PINMUX(26, 2, 0x10)>;	/* MDIO1_MDIO */
 	};
 
+#if (SEL_ADC)
+	adc0_pins: adc0 {
+		pinmux = <RZT2H_PORT_PINMUX(34, 4, 0x1f)>; /* ADCTRG0# */
+	};
+
+	adc1_pins: adc1 {
+		pinmux = <RZT2H_PORT_PINMUX(34, 5, 0x1f)>; /* ADCTRG1# */
+	};
+
+	adc2_pins: adc2 {
+		pinmux = <RZT2H_PORT_PINMUX(34, 6, 0x1f)>; /* ADCTRG2# */
+	};
+#else
 	pins_refclk: pins_refclk {
 		pinmux = <RZT2H_PORT_PINMUX(21, 7, 0x02)>,	/* ETH0_REFCLK */
 			 <RZT2H_PORT_PINMUX(26, 4, 0x02)>,	/* ETH1_REFCLK */
 			 <RZT2H_PORT_PINMUX(31, 0, 0x02)>,	/* ETH2_REFCLK */
 			 <RZT2H_PORT_PINMUX(34, 6, 0x02)>;	/* ETH3_REFCLK */
 	};
+#endif
 
 	eth0_pins: ethss_0 {
 		pinmux = <RZT2H_PORT_PINMUX(20, 0, 0x0F)>,	/* ETH0_TXCLK */
@@ -260,7 +281,7 @@
 			 <RZT2H_PORT_PINMUX(31, 5, 0x0F)>;	/* ETH2_COL */
 	};
 
-#if !(SPI2_SEL)
+#if (!SPI2_SEL && !SEL_ADC)
 	eth3_pins: ethss_3 {
 		pinmux = <RZT2H_PORT_PINMUX(33, 2, 0x0F)>,	/* ETH3_TXCLK */
 			 <RZT2H_PORT_PINMUX(33, 3, 0x0F)>,	/* ETH3_TXD[0] */
@@ -444,7 +465,7 @@
 	};
 };
 
-#if !(SPI2_SEL)
+#if (!SPI2_SEL && !SEL_ADC)
 &ethss {
 	status = "okay";
 	pinctrl-names = "default";
@@ -610,3 +631,23 @@
 &cmtw1 {
 	status = "okay";
 };
+
+#if (SEL_ADC)
+&adc0 {
+	pinctrl-0 = <&adc0_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&adc1 {
+	pinctrl-0 = <&adc1_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&adc2 {
+	pinctrl-0 = <&adc2_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+#endif
