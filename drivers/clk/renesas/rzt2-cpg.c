@@ -795,7 +795,7 @@ static const struct of_device_id rzt2_cpg_match[] = {
 #ifdef CONFIG_CLK_R9A09G087
 	{
 		.compatible = "renesas,r9a09g087-cpg",
-		.data = &r9a09g087_cpg_info,
+		.data = &r9a09g077_cpg_info,
 	},
 #endif
 	{ /* sentinel */ }
