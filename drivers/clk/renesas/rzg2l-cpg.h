@@ -46,7 +46,7 @@
 
 #define PLL146_CONF(n)	(CPG_SAMPLL_CLK1(n) << 22 | CPG_SAMPLL_CLK2(n) << 12)
 
-/* Registers only for RZ/V2H */
+/* Registers only for RZ/V2{H,N} */
 #define CPG_SSEL0		(0x300)
 #define CPG_SSEL1		(0x304)
 #define CPG_SSEL2		(0x308)
@@ -72,7 +72,7 @@
 #define DIVDSIA		DDIV_PACK(CPG_PL5_SDIV, 0, 2)
 #define DIVDSIB		DDIV_PACK(CPG_PL5_SDIV, 8, 4)
 
-/* Divider only for RZ/V2H */
+/* Divider only for RZ/V2{H,N} */
 #define CDDIV0_DIVCTL0	DDIV_PACK(CPG_CDDIV0,  0, 3)
 #define CDDIV0_DIVCTL1	DDIV_PACK(CPG_CDDIV0,  4, 3)
 #define CDDIV0_DIVCTL2	DDIV_PACK(CPG_CDDIV0,  8, 3)
@@ -111,7 +111,7 @@
 #define SEL_SDHI0	DDIV_PACK(CPG_PL2SDHI_DSEL, 0, 2)
 #define SEL_SDHI1	DDIV_PACK(CPG_PL2SDHI_DSEL, 4, 2)
 
-/* Clock selection only for RZ/V2H */
+/* Clock selection only for RZ/V2{H,N} */
 #define SSEL0_SELCTL0	SEL_PLL_PACK(CPG_SSEL0,  0, 1)
 #define SSEL0_SELCTL1	SEL_PLL_PACK(CPG_SSEL0,  4, 1)
 #define SSEL0_SELCTL2	SEL_PLL_PACK(CPG_SSEL0,  8, 1)
@@ -342,6 +342,7 @@ extern const struct rzg2l_cpg_info r9a07g043_cpg_info;
 extern const struct rzg2l_cpg_info r9a07g043f_cpg_info;
 extern const struct rzg2l_cpg_info r9a07g044_cpg_info;
 extern const struct rzg2l_cpg_info r9a07g054_cpg_info;
+extern const struct rzg2l_cpg_info r9a09g056_cpg_info;
 extern const struct rzg2l_cpg_info r9a09g057_cpg_info;
 
 #endif
