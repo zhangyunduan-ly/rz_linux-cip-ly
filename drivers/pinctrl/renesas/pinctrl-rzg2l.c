@@ -2376,6 +2376,20 @@ static struct rzg2l_pinctrl_data r9a07g044_data = {
 	.pwpr = PWPR,
 };
 
+static struct rzg2l_pinctrl_data r9a09g056_data = {
+	.port_pins = rzv2h_gpio_names,
+	.port_pin_configs = r9a09g057_gpio_configs,
+	.dedicated_pins = rzv2h_pins,
+	.n_port_pins = ARRAY_SIZE(rzv2h_gpio_names),
+	.n_dedicated_pins = ARRAY_SIZE(rzv2h_pins),
+	.pin_info = rzv2h_pin_info,
+	.ngpioints = ARRAY_SIZE(rzv2h_pin_info),
+	.irq_mask = false,
+	.extended_reg_offset = 0x10,
+	.have_clrirq_reg = true,
+	.pwpr = PWPR_RZ_V2H,
+};
+
 static struct rzg2l_pinctrl_data r9a09g057_data = {
 	.port_pins = rzv2h_gpio_names,
 	.port_pin_configs = r9a09g057_gpio_configs,
@@ -2404,6 +2418,10 @@ static const struct of_device_id rzg2l_pinctrl_of_table[] = {
 	{
 		.compatible = "renesas,r9a07g044-pinctrl",
 		.data = &r9a07g044_data,
+	},
+	{
+		.compatible = "renesas,r9a09g056-pinctrl",
+		.data = &r9a09g056_data,
 	},
 	{
 		.compatible = "renesas,r9a09g057-pinctrl",
