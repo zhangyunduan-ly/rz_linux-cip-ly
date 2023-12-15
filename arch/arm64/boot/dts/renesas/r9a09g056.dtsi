@@ -351,6 +351,7 @@
 			clock-names = "core", "clkh", "cd", "aclk";
 			resets = <&cpg 0xa7>;
 			power-domains = <&cpg>;
+			mmc-no-pin-volt-switch;
 			status = "disabled";
 		};
 
@@ -367,6 +368,7 @@
 			clock-names = "core", "clkh", "cd", "aclk";
 			resets = <&cpg 0xa8>;
 			power-domains = <&cpg>;
+			mmc-no-pin-volt-switch;
 			status = "disabled";
 		};
 
@@ -383,6 +385,7 @@
 			clock-names = "core", "clkh", "cd", "aclk";
 			resets = <&cpg 0xa9>;
 			power-domains = <&cpg>;
+			mmc-no-pin-volt-switch;
 			status = "disabled";
 		};
 	};
