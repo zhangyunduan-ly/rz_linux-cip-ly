@@ -569,6 +569,24 @@ static int vsc85xx_default_config(struct phy_device *phydev)
 			return rc;
 	}
 
+	mutex_lock(&phydev->lock);
+
+	/* Config 100BASE-TX edge rate control:  ”+3 edge rate” */
+	rc = phy_modify_paged(phydev, MSCC_PHY_PAGE_STANDARD,
+			      MSCC_PHY_EXT_PHY_CNTL_2, 0xe000,
+			      0xe000);
+	if (rc < 0)
+		return rc;
+
+	/* Config 1000BASE-T signal amplitude trim1: “2.7%” */
+	rc = phy_modify_paged(phydev, MSCC_PHY_PAGE_EXTENDED_2,
+			      MSCC_PHY_CU_PMD_TX_CNTL, 0xF000,
+			      0x1000);
+	if (rc < 0)
+		return rc;
+
+	mutex_unlock(&phydev->lock);
+
 	return 0;
 }
 
