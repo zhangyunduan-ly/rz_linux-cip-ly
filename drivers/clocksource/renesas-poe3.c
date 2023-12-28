@@ -961,7 +961,8 @@ static int renesas_poe3_probe(struct platform_device *pdev)
 	if (IS_ERR(poe3->base))
 		return PTR_ERR(poe3->base);
 
-	if (of_device_is_compatible(np, "renesas,r9a09g077-poe3"))
+	if (of_device_is_compatible(np, "renesas,r9a09g077-poe3") ||
+	    of_device_is_compatible(np, "renesas,r9a09g087-poe3"))
 		poe3->is_rzt2h = true;
 	else
 		poe3->is_rzt2h = false;
@@ -1006,6 +1007,7 @@ static const struct of_device_id renesas_poe3_of_table[] = {
 	{ .compatible = "renesas,poe3", },
 	{ .compatible = "renesas,rz-poe3", },
 	{ .compatible = "renesas,r9a09g077-poe3", },
+	{ .compatible = "renesas,r9a09g087-poe3", },
 	{ },
 };
 
