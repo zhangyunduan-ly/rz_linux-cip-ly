@@ -846,6 +846,9 @@ static const struct of_device_id rzg2l_csi2_of_table[] = {
 	{ .compatible = "renesas,r9a09g057-csi2",
 	  .data = (void *) MIPI_CSI2_DPHY_RZ_V2H,
 	},
+	{ .compatible = "renesas,r9a09g056-csi2",
+	  .data = (void *) MIPI_CSI2_DPHY_RZ_V2H,
+	},
 	{ /* sentinel */ },
 };
 
