@@ -18,6 +18,7 @@ properties:
     items:
       - enum:
           - renesas,r9a09g057-usbphy-ctrl # RZ/V2H
+          - renesas,r9a09g056-usbphy-ctrl # RZ/V2N
       - const: renesas,rzv2h-usbphy-ctrl
 
   reg:
