@@ -385,6 +385,18 @@
 			status = "disabled";
 		};
 
+		xhci0: usb@15850000 {
+			compatible = "renesas,rzv2n-xhci";
+			reg = <0 0x15850000 0 0x10000>;
+			interrupts = <GIC_SPI 759 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&cpg CPG_MOD R9A09G056_USB30_ACLK>,
+				 <&cpg CPG_MOD R9A09G056_USB30_PCLK_USBTST>;
+			clock-names = "reg", "usbtst";
+			power-domains = <&cpg>;
+			resets = <&cpg R9A09G056_USB30_ARESETN>;
+			status = "disabled";
+		};
+
 		sdhi0: mmc@15c00000  {
 			compatible = "renesas,sdhi-r9a09g056",
 				     "renesas,rcar-gen3-sdhi";
