@@ -639,6 +639,10 @@ static const struct of_device_id rcar_gen3_phy_usb2_match_table[] = {
 		.compatible = "renesas,rzv2h-usb2-phy",
 		.data = &rz_v2h_phy_usb2_data,
 	},
+	{
+		.compatible = "renesas,rzv2n-usb2-phy",
+		.data = &rz_v2h_phy_usb2_data,
+	},
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, rcar_gen3_phy_usb2_match_table);
