@@ -1631,6 +1631,9 @@ static const struct of_device_id rzg2l_mipi_dsi_of_table[] = {
 	{ .compatible = "renesas,r9a09g057-mipi-dsi",
 	  .data = (void *) MIPI_DSI_DPHY_RZ_V2H,
 	},
+	{ .compatible = "renesas,r9a09g056-mipi-dsi",
+	  .data = (void *) MIPI_DSI_DPHY_RZ_V2H,
+	},
 	{ },
 };
 

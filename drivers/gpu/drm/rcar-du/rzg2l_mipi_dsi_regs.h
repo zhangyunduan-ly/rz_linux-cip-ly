@@ -43,7 +43,7 @@
 
 #define DSIDPHYTRIM0			0x44
 
-/* RZ/V2H DPHY Registers */
+/* RZ/V2H & RZ/V2N DPHY Registers */
 #define PLLENR				0x000
 #define PLLENR_PLLEN			BIT(0)
 
