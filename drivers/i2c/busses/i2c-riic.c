@@ -566,6 +566,7 @@ static int riic_i2c_remove(struct platform_device *pdev)
 
 static const struct of_device_id riic_i2c_dt_ids[] = {
 	{ .compatible = "renesas,riic-rz", .data = (void *)RIIC_COMMON_REGTYPE },
+	{ .compatible = "renesas,riic-r9a09g056", .data = (void *)RIIC_V2H_REGTYPE },
 	{ .compatible = "renesas,riic-r9a09g057", .data = (void *)RIIC_V2H_REGTYPE },
 	{ /* Sentinel */ },
 };
