@@ -1258,6 +1258,7 @@ static int rz_dmac_remove(struct platform_device *pdev)
 static const struct of_device_id of_rz_dmac_match[] = {
 	{ .compatible = "renesas,rz-dmac", .data = (void *)RZ_COMMON_DMAC },
 	{ .compatible = "renesas,r9a09g057-dmac", .data = (void *)RZ_V2H_DMAC },
+	{ .compatible = "renesas,r9a09g056-dmac", .data = (void *)RZ_V2H_DMAC },
 	{ /* Sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, of_rz_dmac_match);
