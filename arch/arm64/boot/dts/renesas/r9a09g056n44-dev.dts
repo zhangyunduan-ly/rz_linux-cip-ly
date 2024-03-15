@@ -543,3 +543,7 @@
 &wdt1 {
 	status = "okay";
 };
+
+&rtc {
+	status = "okay";
+};
