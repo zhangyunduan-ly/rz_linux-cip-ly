@@ -323,6 +323,7 @@ config ARCH_R9A07G054
 config ARCH_R9A09G056
 	bool "ARM64 Platform support for RZ/V2N"
 	select ARCH_RZG2L
+	select SYS_SUPPORTS_RENESAS_OSTM
 	help
 	  This enables support for the Renesas RZ/V2N SoC variants.
 
