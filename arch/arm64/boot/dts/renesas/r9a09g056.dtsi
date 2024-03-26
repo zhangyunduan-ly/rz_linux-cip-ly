@@ -954,6 +954,62 @@
 			status = "disabled";
 		};
 
+		spi0: spi@12800000 {
+			compatible = "renesas,rspi-v2n";
+			reg = <0 0x12800000 0 0x400>;
+			interrupts = <GIC_SPI 106 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 500 IRQ_TYPE_EDGE_RISING>,
+				     <GIC_SPI 501 IRQ_TYPE_EDGE_RISING>;
+			interrupt-names = "error", "rx", "tx";
+			clocks = <&cpg CPG_MOD 0x54>,
+				 <&cpg CPG_MOD 0x55>,
+				 <&cpg CPG_MOD 0x56>;
+			resets = <&cpg 0x7b>;
+			power-domains = <&cpg>;
+			num-cs = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		spi1: spi@12800400 {
+			compatible = "renesas,rspi-v2n";
+			reg = <0 0x12800400 0 0x400>;
+			interrupts = <GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 502 IRQ_TYPE_EDGE_RISING>,
+				     <GIC_SPI 503 IRQ_TYPE_EDGE_RISING>;
+			interrupt-names = "error", "rx", "tx";
+			clocks = <&cpg CPG_MOD 0x57>,
+				<&cpg CPG_MOD 0x58>,
+				<&cpg CPG_MOD 0x59>;
+			resets = <&cpg 0x7d>;
+			power-domains = <&cpg>;
+			num-cs = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		spi2: spi@12800800 {
+			compatible = "renesas,rspi-v2n";
+			reg = <0 0x12800800 0 0x400>;
+			interrupts = <GIC_SPI 112 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 504 IRQ_TYPE_EDGE_RISING>,
+				     <GIC_SPI 505 IRQ_TYPE_EDGE_RISING>;
+			interrupt-names = "error", "rx", "tx";
+			clocks = <&cpg CPG_MOD 0x5a>,
+				<&cpg CPG_MOD 0x5b>,
+				<&cpg CPG_MOD 0x5c>;
+			resets = <&cpg 0x7f>;
+			dmas = <&dmac1 0x7F4C91>, <&dmac1 0x7F4C90>;
+			dma-names = "tx", "rx";
+			power-domains = <&cpg>;
+			num-cs = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
 		xspi: spi@11030000 {
 			compatible = "renesas,v2h-xspi-if";
 			reg = <0 0x11030000 0 0x10000>,
