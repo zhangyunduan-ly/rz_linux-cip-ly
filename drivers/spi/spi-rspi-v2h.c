@@ -838,8 +838,9 @@ static const struct spi_ops rspi_v2h_ops = {
 
 #ifdef CONFIG_OF
 static const struct of_device_id rspi_of_match[] = {
-	/* RSPI on V2H */
+	/* RSPI on V2H/N */
 	{ .compatible = "renesas,rspi-v2h", .data = &rspi_v2h_ops },
+	{ .compatible = "renesas,rspi-v2n", .data = &rspi_v2h_ops },
 	{ /* sentinel */ }
 };
 
