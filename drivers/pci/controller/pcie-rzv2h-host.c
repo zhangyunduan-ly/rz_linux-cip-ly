@@ -1194,6 +1194,7 @@ static int rzv2h_pcie_parse_map_dma_ranges(struct rzv2h_pcie_host *host)
 
 static const struct of_device_id rzv2h_pcie_of_match[] = {
 	{ .compatible = "renesas,rzv2h-pcie", },
+	{ .compatible = "renesas,rzv2n-pcie", },
 	{},
 };
 
