@@ -330,9 +330,6 @@ static int ethss_init_hw(struct ethss *ethss, u32 cfg_mode)
 {
 	int port;
 
-	ethss_reg_writel(ethss, ETHSS_MODCTRL,
-			 FIELD_PREP(ETHSS_MODCTRL_SW_MODE, cfg_mode));
-
 	for (port = 0; port < ETHSS_MAX_NR_PORTS; port++) {
 		ethss_converter_enable(ethss, port, 0);
 		/* Disable speed/duplex control from these registers, datasheet
@@ -342,6 +339,9 @@ static int ethss_init_hw(struct ethss *ethss, u32 cfg_mode)
 		ethss_reg_writel(ethss, ETHSS_SWCTRL, 0x0);
 		ethss_reg_writel(ethss, ETHSS_SWDUPC, 0x0);
 	}
+
+	ethss_reg_writel(ethss, ETHSS_MODCTRL,
+			 FIELD_PREP(ETHSS_MODCTRL_SW_MODE, cfg_mode));
 
 	return 0;
 }
