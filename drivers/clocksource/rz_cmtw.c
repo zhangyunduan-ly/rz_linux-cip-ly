@@ -39,6 +39,7 @@
 #define CMWCR_CMWIE		(1 << 3)
 #define CMWCR_CMS32		(0 << 9)
 #define CMWCR_CMS16		(1 << 9)
+#define CMWCR_CCLR_COR		(0 << 13)
 
 /* Timer I/O Control Register */
 #define CMWIOR			0x08
@@ -71,6 +72,7 @@ struct rz_cmtw_channel {
 	struct clocksource cs;
 	bool cs_enabled;
 	unsigned int enable_count;
+	unsigned long flags;
 };
 
 struct rz_cmtw_device {
@@ -137,7 +139,7 @@ static int __rz_cmtw_enable(struct rz_cmtw_channel *ch)
 	writel(0, ch->base + CMWCNT);
 
 	/* configure channel to parent clock / 8, IRQ OFF, 32 bits counter */
-	writew(CMWCR_CKS8 | CMWCR_CMS32, ch->base + CMWCR);
+	writew(CMWCR_CKS8 | CMWCR_CMS32 | CMWCR_CCLR_COR, ch->base + CMWCR);
 
 	/* enable channel */
 	rz_cmtw_start_stop_ch(ch, 1);
@@ -159,7 +161,7 @@ static void __rz_cmtw_disable(struct rz_cmtw_channel *ch)
 	rz_cmtw_start_stop_ch(ch, 0);
 
 	/* configure channel to parent clock / 8, IRQ OFF, 32 bits counter */
-	writew(CMWCR_CKS8 | CMWCR_CMS32, ch->base + CMWCR);
+	writew(CMWCR_CKS8 | CMWCR_CMS32 | CMWCR_CCLR_COR, ch->base + CMWCR);
 
 	/* stop clock */
 	clk_disable_unprepare(ch->clk);
@@ -212,14 +214,6 @@ static void rz_cmtw_clocksource_disable(struct clocksource *cs)
 	ch->cs_enabled = false;
 }
 
-
-static int rz_cmtw_register_clockevent(struct rz_cmtw_channel *ch,
-				       const char *name)
-{
-	/* TODO: add registering clockevent */
-	return 0;
-};
-
 static int rz_cmtw_register_clocksource(struct rz_cmtw_channel *ch,
 				       const char *name)
 {
@@ -240,6 +234,142 @@ static int rz_cmtw_register_clocksource(struct rz_cmtw_channel *ch,
 
 	return 0;
 }
+
+static struct rz_cmtw_channel *ced_to_rz_cmtw(struct clock_event_device *ced)
+{
+	return container_of(ced, struct rz_cmtw_channel, ced);
+}
+
+static irqreturn_t rz_cmtw_interrupt(int irq, void *dev_id)
+{
+	struct rz_cmtw_channel *ch = dev_id;
+
+	if (clockevent_state_oneshot(&ch->ced))
+		rz_cmtw_disable(ch);
+
+	/* notify clockevent layer */
+	ch->ced.event_handler(&ch->ced);
+
+	return IRQ_HANDLED;
+}
+
+static void rz_cmtw_set_next(struct rz_cmtw_channel *ch, unsigned long delta,
+			     int periodic)
+{
+	/* stop timer */
+	rz_cmtw_start_stop_ch(ch, 0);
+
+	/* configure channel to parent clock / 8, IRQ ON, 32 bits counter */
+	writew(CMWCR_CKS8 | CMWCR_CMS32 | CMWCR_CCLR_COR | CMWCR_CMWIE,
+						ch->base + CMWCR);
+
+	if (periodic) {
+		writel(delta, ch->base + CMWCOR);
+		delta = 0;
+		writel(0, ch->base + CMWCNT);
+	} else {
+		writel(0xFFFFFFFF, ch->base + CMWCOR);
+		delta = delta ^ 0xFFFFFFFF;
+		writel(delta, ch->base + CMWCNT);
+	}
+
+	/* start timer */
+	rz_cmtw_start_stop_ch(ch, 1);
+}
+
+static void rz_cmtw_clock_event_start(struct rz_cmtw_channel *ch, int periodic)
+{
+	rz_cmtw_enable(ch);
+
+	if (periodic) {
+		ch->periodic = ((ch->rate + HZ / 2) / HZ) - 1;
+		rz_cmtw_set_next(ch, ch->periodic, 1);
+	}
+}
+
+static int rz_cmtw_clock_event_shutdown(struct clock_event_device *ced)
+{
+	struct rz_cmtw_channel *ch = ced_to_rz_cmtw(ced);
+
+	if (clockevent_state_oneshot(ced) || clockevent_state_periodic(ced))
+		rz_cmtw_disable(ch);
+	return 0;
+}
+
+static int rz_cmtw_clock_event_set_state(struct clock_event_device *ced,
+					int periodic)
+{
+	struct rz_cmtw_channel *ch = ced_to_rz_cmtw(ced);
+
+	/* deal with old setting first */
+	if (clockevent_state_oneshot(ced) || clockevent_state_periodic(ced))
+		rz_cmtw_disable(ch);
+
+	dev_info(&ch->cmtw->pdev->dev, "ch%u: used for %s clock events\n",
+		 ch->index, periodic ? "periodic" : "oneshot");
+	rz_cmtw_clock_event_start(ch, periodic);
+	return 0;
+}
+
+static int rz_cmtw_clock_event_set_oneshot(struct clock_event_device *ced)
+{
+	return rz_cmtw_clock_event_set_state(ced, 0);
+}
+
+static int rz_cmtw_clock_event_set_periodic(struct clock_event_device *ced)
+{
+	return rz_cmtw_clock_event_set_state(ced, 1);
+}
+
+static int rz_cmtw_clock_event_next(unsigned long delta,
+				    struct clock_event_device *ced)
+{
+	struct rz_cmtw_channel *ch = ced_to_rz_cmtw(ced);
+
+	WARN_ON(!clockevent_state_oneshot(ced));
+
+	/* program new delta value */
+	rz_cmtw_set_next(ch, delta, 0);
+	return 0;
+}
+
+
+static int rz_cmtw_register_clockevent(struct rz_cmtw_channel *ch,
+				       const char *name)
+{
+	struct clock_event_device *ced = &ch->ced;
+	int irq;
+	int ret;
+
+	ch->irq = platform_get_irq(ch->cmtw->pdev, ch->index);
+	if (ch->irq < 0)
+		return irq;
+
+	ret = request_irq(ch->irq, rz_cmtw_interrupt,
+			  IRQF_TIMER | IRQF_IRQPOLL | IRQF_NOBALANCING,
+			  dev_name(&ch->cmtw->pdev->dev), ch);
+	if (ret) {
+		dev_err(&ch->cmtw->pdev->dev, "ch%u: failed to request irq %d\n",
+			ch->index, irq);
+		return ret;
+	}
+
+	ced->name = name;
+	ced->features = CLOCK_EVT_FEAT_PERIODIC;
+	ced->features |= CLOCK_EVT_FEAT_ONESHOT;
+	ced->rating = 100;
+	ced->cpumask = cpu_possible_mask;
+	ced->set_next_event = rz_cmtw_clock_event_next;
+	ced->set_state_shutdown = rz_cmtw_clock_event_shutdown;
+	ced->set_state_periodic = rz_cmtw_clock_event_set_periodic;
+	ced->set_state_oneshot = rz_cmtw_clock_event_set_oneshot;
+
+	dev_info(&ch->cmtw->pdev->dev, "ch%u: used for clock events\n",
+		ch->index);
+	clockevents_register_device(ced);
+
+	return 0;
+};
 
 static int rz_cmtw_register(struct rz_cmtw_channel *ch, const char *name,
 			   bool clockevent, bool clocksource)
@@ -266,10 +396,6 @@ static int rz_cmtw_channel_setup(struct rz_cmtw_channel *ch, unsigned int index,
 	ch->cmtw = cmtw;
 	ch->index = index;
 	ch->base = cmtw->mapbase + ch->index * cmtw->info->channel_offset;
-
-	ch->irq = platform_get_irq(cmtw->pdev, index);
-	if (ch->irq < 0)
-		return ch->irq;
 
 	ch->cs_enabled = false;
 	ch->enable_count = 0;
