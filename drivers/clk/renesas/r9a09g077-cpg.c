@@ -163,7 +163,7 @@ static const struct {
 };
 
 static const struct {
-	struct rzt2_mod_clk common[59];
+	struct rzt2_mod_clk common[60];
 } mod_clks = {
 	.common = {
 		DEF_MOD("sci0",         R9A09G077_SCI0_CLK, R9A09G077_PCLKM,
@@ -238,6 +238,8 @@ static const struct {
 					0x30C, 5, 0),
 		DEF_MOD("cmtw1",	R9A09G077_CMTW1_CLK, R9A09G077_PCLKL,
 					0x30C, 6, 0),
+		DEF_MOD("tsu",		R9A09G077_TSU_CLK, R9A09G077_PCLKL,
+					0x30C, 7, 0),
 		DEF_MOD("spi0",		R9A09G077_SPI0_CLK, R9A09G077_SPI0,
 					0x304, 4, 0),
 		DEF_MOD("spi1",         R9A09G077_SPI1_CLK, R9A09G077_SPI1,
