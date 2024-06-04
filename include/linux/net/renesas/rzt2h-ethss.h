@@ -38,4 +38,20 @@ void ethss_link_up(struct ethss_port *ethss_port, phy_interface_t interface,
 int ethss_config(struct ethss_port *ethss_port, phy_interface_t interface);
 void ethss_switchcore_adjust(struct ethss_port *ethss_port, int duplex, int speed);
 
+/**
+ * struct renesas_rzt2h_eqos - GMAC ethernet struct
+ */
+struct renesas_rzt2h_eqos {
+	struct device *dev;
+	void __iomem *regs;
+
+	struct clk *clk;
+	struct reset_control *rst_h;
+	struct reset_control *rst_m;
+	struct gpio_desc *reset;
+
+	struct ethss *ethss;
+	struct ethss_port *ethss_port;
+};
+
 #endif
