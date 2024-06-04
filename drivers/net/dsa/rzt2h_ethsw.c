@@ -1060,6 +1060,7 @@ static int ethsw_pcs_get(struct ethsw *ethsw)
 		}
 
 		ethsw->pcs[reg] = pcs;
+		ethsw->ethss = pcs->ethss;
 
 		dev_dbg(ethsw->dev, "Config ETHSS port = %d , mode = %s for ETHSW OK\n",
 			ethsw->pcs[reg]->port, phy_modes(ethsw->pcs[reg]->interface));
@@ -1102,6 +1103,8 @@ static int ethsw_probe(struct platform_device *pdev)
 	ret = ethsw_pcs_get(ethsw);
 	if (ret)
 		return ret;
+
+	ethsw->ethss->ethsw_base = ethsw->base;
 
 	ethsw->reset = devm_gpiod_get(&pdev->dev, "phy-reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(ethsw->reset)) {

@@ -251,6 +251,7 @@ struct ethsw {
 	struct device *dev;
 	struct mii_bus	*mii_bus;
 	struct ethss_port *pcs[ETHSW_PORTS_NUM - 1];
+	struct ethss *ethss;
 	struct dsa_switch ds;
 	struct mutex lk_lock; /* Lock for the lookup table */
 	struct mutex vlan_lock; /* Lock for the vlan operation */

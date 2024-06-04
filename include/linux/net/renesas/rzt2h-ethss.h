@@ -16,6 +16,7 @@ struct ethss {
 	struct reset_control *rst_ethss;
 	struct reset_control *rst_conv;
 	spinlock_t lock;
+	void __iomem *ethsw_base;
 };
 
 /**
