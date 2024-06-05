@@ -760,7 +760,15 @@ int stmmac_init_tstamp_counter(struct stmmac_priv *priv, u32 systime_flags)
 	 * where, freq_div_ratio = 1e9ns/sec_inc
 	 */
 	temp = (u64)(temp << 32);
+#if IS_ENABLED(CONFIG_RZT2H_ETHSS)
+	/* In RZT2H, PTP timer is different from others and don't have
+	 * addend register, so that we use priv->default_addend to store
+	 * tick count difference
+	 */
+	priv->default_addend = 41080000;
+#else
 	priv->default_addend = div_u64(temp, priv->plat->clk_ptp_rate);
+#endif
 	stmmac_config_addend(priv, priv->ptpaddr, priv->default_addend);
 
 	/* initialize system time */
