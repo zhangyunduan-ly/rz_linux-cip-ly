@@ -449,9 +449,10 @@ static void *renesas_rzt2h_eqos_probe(struct platform_device *pdev,
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *node = pdev->dev.of_node;
-	struct device_node *pcs_node;
+	struct device_node *pcs_node, *ethss_node;
 	struct renesas_rzt2h_eqos *eqos;
 	phy_interface_t interface;
+	struct platform_device *ethss_dev_np;
 	int err;
 
 	eqos = devm_kzalloc(&pdev->dev, sizeof(*eqos), GFP_KERNEL);
@@ -465,6 +466,17 @@ static void *renesas_rzt2h_eqos_probe(struct platform_device *pdev,
 
 	if (!is_of_node(dev->fwnode))
 		goto bypass_clk_reset_gpio;
+
+	ethss_node = of_parse_phandle(node, "ethss-handle", 0);
+	if (ethss_node) {
+		ethss_dev_np = of_find_device_by_node(ethss_node);
+		if (ethss_dev_np) {
+			dev_dbg(&pdev->dev, "GMAC using %s\n", ethss_dev_np->name);
+			eqos->ethss = platform_get_drvdata(ethss_dev_np);
+		} else {
+			dev_dbg(&pdev->dev, "GMAC not use ethss-handle\n");
+		}
+	}
 
 	pcs_node = of_parse_phandle(node, "pcs-handle", 0);
 	if (!pcs_node)
@@ -488,6 +500,7 @@ static void *renesas_rzt2h_eqos_probe(struct platform_device *pdev,
 			dev_err(&pdev->dev, "Failed to config ethss\n");
 			goto ethss;
 		}
+		eqos->ethss = eqos->ethss_port->ethss;
 
 		dev_dbg(&pdev->dev, "Config ETHSS port = %d , mode = %s for GMAC OK\n",
 			eqos->ethss_port->port, phy_modes(eqos->ethss_port->interface));
