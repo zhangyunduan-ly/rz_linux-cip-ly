@@ -56,6 +56,9 @@
 #define ETHSS_SWDUPC_DUPLEX_MASK(x)	BIT(x)
 #define ETHSS_SWDUPC_DUPLEX_FULL(x)	BIT(x)
 
+#define ETHSS_PTPMCTRL                  0x00C
+#define ETHSS_PTPMCTRL_GMAC(gmac)       BIT(gmac)
+
 #define ETHSS_MAX_NR_PORTS		4
 
 #define ETHSS_MODCTRL_CONF_CONV_NUM	5
@@ -325,6 +328,22 @@ void ethss_destroy(struct ethss_port *ethss_port)
 	kfree(ethss_port);
 }
 EXPORT_SYMBOL(ethss_destroy);
+
+int ethss_gmac_ptp_timer(struct ethss *ethss, int gmac, int ethsw_timer)
+{
+	if (gmac > 2)
+		return ERR_PTR(-EINVAL);
+
+	if (ethsw_timer > 1)
+		return ERR_PTR(-EINVAL);
+
+	if (ethsw_timer)
+		ethss_reg_rmw(ethss, ETHSS_PTPMCTRL,
+			      ETHSS_PTPMCTRL_GMAC(gmac), ETHSS_PTPMCTRL_GMAC(gmac));
+
+	return 0;
+}
+EXPORT_SYMBOL(ethss_gmac_ptp_timer);
 
 static int ethss_init_hw(struct ethss *ethss, u32 cfg_mode)
 {
