@@ -623,3 +623,15 @@
 
 	status = "okay";
 };
+
+&adc0 {
+	status = "okay";
+};
+
+&adc1 {
+	status = "okay";
+};
+
+&adc2 {
+	status = "okay";
+};
