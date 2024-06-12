@@ -2182,6 +2182,10 @@ static const struct of_device_id rcar_canfd_of_table[] = {
 		.compatible = "renesas,r9a09g057-canfd",
 		.data = &rzv2h_hw_info,
 	},
+	{
+		.compatible = "renesas,r9a09g056-canfd",
+		.data = &rzv2h_hw_info,
+	},
 
 	{ }
 };
