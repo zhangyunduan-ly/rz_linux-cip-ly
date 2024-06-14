@@ -26,6 +26,11 @@
 
 	aliases {
 		serial0 = &scif0;
+		serial1 = &sci0;
+		serial2 = &sci4;
+		serial3 = &sci5;
+		serial4 = &sci8;
+		serial5 = &sci9;
 		mmc0 = &sdhi0;
 		mmc1 = &sdhi1;
 		mmc2 = &sdhi2;
@@ -271,6 +276,32 @@
 	can3_pins: can3 {
 		pinmux = <RZG2L_PORT_PINMUX(8, 6, 5)>, /* TX */
 			 <RZG2L_PORT_PINMUX(8, 7, 5)>; /* RX */
+	};
+
+	/* Support pinctrl for SCI[0,4,5,8,9] function */
+	sci0_pins: sci0 {
+		pinmux = <RZG2L_PORT_PINMUX(5, 0, 1)>, /* SCI0_TXD_MOSI_SDA */
+			 <RZG2L_PORT_PINMUX(5, 1, 1)>; /* SCI0_RXD_MISO_SCL */
+	};
+
+	sci4_pins: sci4 {
+		pinmux = <RZG2L_PORT_PINMUX(8, 4, 6)>, /* SCI4_TXD_MOSI_SDA */
+			 <RZG2L_PORT_PINMUX(8, 5, 6)>; /* SCI4_RXD_MISO_SCL */
+	};
+
+	sci5_pins: sci5 {
+		pinmux = <RZG2L_PORT_PINMUX(8, 6, 6)>, /* SCI5_TXD_MOSI_SDA */
+			 <RZG2L_PORT_PINMUX(8, 7, 6)>; /* SCI5_RXD_MISO_SCL */
+	};
+
+	sci8_pins: sci8 {
+		pinmux = <RZG2L_PORT_PINMUX(8, 0, 6)>, /* SCI8_TXD_MOSI_SDA */
+			 <RZG2L_PORT_PINMUX(8, 1, 6)>; /* SCI8_RXD_MISO_SCL */
+	};
+
+	sci9_pins: sci9 {
+		pinmux = <RZG2L_PORT_PINMUX(8, 2, 6)>, /* SCI9_TXD_MOSI_SDA */
+			 <RZG2L_PORT_PINMUX(8, 3, 6)>; /* SCI9_RXD_MISO_SCL */
 	};
 };
 
@@ -677,4 +708,34 @@
 	channel3 {
 		status = "okay";
 	};
+};
+
+&sci0 {
+	pinctrl-0 = <&sci0_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&sci4 {
+	pinctrl-0 = <&sci4_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&sci5 {
+	pinctrl-0 = <&sci5_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&sci8 {
+	pinctrl-0 = <&sci8_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&sci9 {
+	pinctrl-0 = <&sci9_pins>;
+	pinctrl-names = "default";
+	status = "okay";
 };
