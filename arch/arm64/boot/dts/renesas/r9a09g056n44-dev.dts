@@ -31,6 +31,7 @@
 
 	aliases {
 		serial0 = &scif0;
+		serial1 = &sci3;
 		mmc0 = &sdhi0;
 		mmc2 = &sdhi2;
 		ethernet0 = &eth0;
@@ -290,6 +291,12 @@
 	};
 #endif
 
+	/* Support pinctrl for SCI 3 function */
+	sci3_pins: sci3 {
+		pinmux = <RZG2L_PORT_PINMUX(5, 6, 1)>, /* SCI3_TXD_MOSI_SDA */
+			 <RZG2L_PORT_PINMUX(5, 7, 1)>; /* SCI3_RXD_MISO_SCL */
+		bias-pull-up;
+	};
 };
 
 &extal_clk {
@@ -719,3 +726,9 @@
 	/delete-node/ channel2;
 };
 #endif
+
+&sci3 {
+	pinctrl-0 = <&sci3_pins>;
+	pinctrl-names = "default";
+	status ="okay";
+};
