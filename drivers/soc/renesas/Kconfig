@@ -344,6 +344,12 @@ config ARCH_R9A09G047
 	help
 	  This enables support for the Renesas RZ/G3E SoC variants.
 
+config ARCH_R9A09G056
+	bool "ARM64 Platform support for RZ/V2N(P)"
+	select ARCH_RZG2L
+	help
+	  This enables support for the Renesas RZ/V2N(P) SoC variants.
+
 config ARCH_R9A09G057
 	bool "ARM64 Platform support for RZ/V2H"
 	select ARCH_RZG2L

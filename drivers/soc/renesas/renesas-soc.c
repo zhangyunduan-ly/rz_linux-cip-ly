@@ -88,6 +88,10 @@ static const struct renesas_family fam_rzg3e __initconst __maybe_unused = {
 	.name   = "RZ/G3E",
 };
 
+static const struct renesas_family fam_rzv2n __initconst __maybe_unused = {
+	.name	= "RZ/V2N",
+};
+
 static const struct renesas_family fam_rzv2h __initconst __maybe_unused = {
 	.name   = "RZ/V2H",
 };
@@ -204,6 +208,11 @@ static const struct renesas_soc soc_rz_g3e __initconst __maybe_unused = {
 static const struct renesas_soc soc_rz_v2h __initconst __maybe_unused = {
 	.family = &fam_rzv2h,
 	.id     = 0x847A447,
+};
+
+static const struct renesas_soc soc_rz_v2n __initconst __maybe_unused = {
+	.family = &fam_rzv2n,
+	.id     = 0x867d447,
 };
 
 static const struct renesas_soc soc_rcar_m1a __initconst __maybe_unused = {
@@ -424,6 +433,9 @@ static const struct of_device_id renesas_socs[] __initconst = {
 #if defined(CONFIG_ARCH_R9A09G047)
 	{ .compatible = "renesas,r9a09g047",    .data = &soc_rz_g3e },
 #endif
+#if defined(CONFIG_ARCH_R9A09G056)
+	{ .compatible = "renesas,r9a09g056",	.data = &soc_rz_v2n },
+#endif
 #if defined(CONFIG_ARCH_R9A09G057)
 	{ .compatible = "renesas,r9a09g057",    .data = &soc_rz_v2h },
 #endif
@@ -475,6 +487,7 @@ static const struct of_device_id renesas_ids[] __initconst = {
 	{ .compatible = "renesas,r9a08g045-sysc",	.data = &id_rzg2l },
 	{ .compatible = "renesas,r9a09g011-sys",	.data = &id_rzv2m },
 	{ .compatible = "renesas,r9a09g047-sysc",       .data = &id_rzg3e },
+	{ .compatible = "renesas,r9a09g056-sysc",       .data = &id_rzg3e },
 	{ .compatible = "renesas,r9a09g057-sysc",       .data = &id_rzg3e },
 	{ .compatible = "renesas,prr",			.data = &id_prr },
 	{ /* sentinel */ }
@@ -544,7 +557,7 @@ static int __init renesas_soc_init(void)
 			eslo = product & 0xf;
 			soc_dev_attr->revision = kasprintf(GFP_KERNEL, "ES%u.%u",
 							   eshi, eslo);
-		}  else if (id == &id_rzg2l) {
+		}  else if (id == &id_rzg2l || id == &id_rzg3e) {
 			eshi =  ((product >> 28) & 0x0f);
 			soc_dev_attr->revision = kasprintf(GFP_KERNEL, "%u",
 							   eshi);
