@@ -57,8 +57,9 @@
 
 	aliases {
 		serial0 = &scif0;
-		serial1 = &sci4;
-		serial2 = &sci5;
+		serial1 = &sci0;
+		serial2 = &sci4;
+		serial3 = &sci5;
 		mmc0 = &sdhi0;
 		mmc1 = &sdhi1;
 		mmc2 = &sdhi2;
@@ -332,6 +333,13 @@
 		pins =  "SCIF_RXD", "SCIF_TXD";
 	};
 
+	sci0_pins: sci0 {
+		pinmux = <RZG2L_PORT_PINMUX(5, 0, 1)>, /* SCI0_TXD_MOSI_SDA */
+			 <RZG2L_PORT_PINMUX(5, 1, 1)>, /* SCI0_RXD_MISO_SCL */
+			 <RZG2L_PORT_PINMUX(5, 2, 4)>, /* SCI0_CTS */
+			 <RZG2L_PORT_PINMUX(5, 3, 2)>; /* SCI0_RTS */
+	};
+
 	sci4_pins: sci4 {
 		pinmux = <RZG2L_PORT_PINMUX(8, 4, 6)>, /* SCI4_TXD_MOSI_SDA */
 			 <RZG2L_PORT_PINMUX(8, 5, 6)>; /* SCI4_RXD_MISO_SCL */
@@ -480,6 +488,14 @@
 	pinctrl-0 = <&scif0_pins>;
 	pinctrl-names = "default";
 
+	status = "okay";
+};
+
+&sci0 {
+	pinctrl-0 = <&sci0_pins>;
+	pinctrl-names = "default";
+
+	uart-has-rtscts;
 	status = "okay";
 };
 
