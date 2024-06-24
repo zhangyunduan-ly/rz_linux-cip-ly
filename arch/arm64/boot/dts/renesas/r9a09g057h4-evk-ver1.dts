@@ -47,9 +47,16 @@
  *
  * SEL_CAN01_HEADER:
  *	1: CAN0/1	0: External Header Pin
+ * SEL_SCI4_HEADER:
+ *	1: SCI4		0: CAN0/1
  */
 
 #define SEL_CAN01_HEADER	1
+#define SEL_SCI4_CAN01		0
+
+#if (!SEL_CAN01_HEADER && SEL_SCI4_CAN01)
+#error "Cannot set 1 to SEL_SCI4_CAN01 as SEL_CAN01_HEADER=0"
+#endif
 
 / {
 	model = "Renesas EVK ver1 based on r9a09g057h4";
@@ -317,7 +324,7 @@
 };
 
 &pinctrl {
-#if (SEL_CAN01_HEADER)
+#if (SEL_CAN01_HEADER && !SEL_SCI4_CAN01)
 	can0_pins: can0 {
 		pinmux = <RZG2L_PORT_PINMUX(8, 0, 5)>, /* TX */
 			 <RZG2L_PORT_PINMUX(8, 1, 5)>; /* RX */
@@ -340,10 +347,14 @@
 			 <RZG2L_PORT_PINMUX(5, 3, 2)>; /* SCI0_RTS */
 	};
 
+#if (SEL_CAN01_HEADER && SEL_SCI4_CAN01)
 	sci4_pins: sci4 {
 		pinmux = <RZG2L_PORT_PINMUX(8, 4, 6)>, /* SCI4_TXD_MOSI_SDA */
-			 <RZG2L_PORT_PINMUX(8, 5, 6)>; /* SCI4_RXD_MISO_SCL */
+			 <RZG2L_PORT_PINMUX(8, 5, 6)>, /* SCI4_RXD_MISO_SCL */
+			 <RZG2L_PORT_PINMUX(8, 0, 3)>, /* SCI4_CTS */
+			 <RZG2L_PORT_PINMUX(8, 1, 1)>; /* SCI4_RTS */
 	};
+#endif
 
 	sci5_pins: sci5 {
 		pinmux = <RZG2L_PORT_PINMUX(8, 6, 6)>, /* SCI5_TXD_MOSI_SDA */
@@ -499,11 +510,15 @@
 	status = "okay";
 };
 
+#if (SEL_CAN01_HEADER && SEL_SCI4_CAN01)
 &sci4 {
 	pinctrl-0 = <&sci4_pins>;
 	pinctrl-names = "default";
+
+	uart-has-rtscts;
 	status = "okay";
 };
+#endif
 
 &sci5 {
 	pinctrl-0 = <&sci5_pins>;
@@ -962,7 +977,7 @@
 		status = "okay";
 };
 
-#if (SEL_CAN01_HEADER)
+#if (SEL_CAN01_HEADER && !SEL_SCI4_CAN01)
 &canfd {
 	pinctrl-0 = <&can0_pins &can1_pins>;
 	pinctrl-names = "default";
