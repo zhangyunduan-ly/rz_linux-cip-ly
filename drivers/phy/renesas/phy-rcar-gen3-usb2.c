@@ -26,6 +26,13 @@
 #include <linux/workqueue.h>
 #include <linux/sys_soc.h>
 
+/*
+ * Set marco to 1 to use OTG with CN33
+ * SEL_OTG = 1 use OTG with CN33
+ * SEL_OTG = 0 use USB host with CN80 and USB function with CN79 (default)
+ */
+#define SEL_OTG			0
+
 /******* USB2.0 Host registers (original offset is +0x200) *******/
 #define USB2_INT_ENABLE		0x000
 #define USB2_USBCTR		0x00c
@@ -69,6 +76,8 @@
 					 USB2_OBINT_VBSTAINT)
 
 /* VBCTRL */
+#define USB2_VBCTRL_VBSTA		BIT(29)
+#define USB2_VBCTRL_VBLVL		BIT(21)
 #define USB2_VBCTRL_OCCLREN		BIT(16)
 #define USB2_VBCTRL_DRVVBUSSEL		BIT(8)
 #define USB2_VBCTRL_SIDDQREL		BIT(2)
@@ -84,6 +93,7 @@
 /* ADPCTRL */
 #define USB2_ADPCTRL_OTGSESSVLD		BIT(20)
 #define USB2_ADPCTRL_IDDIG		BIT(19)
+#define USB2_ADPCTRL_VBUSVALID		BIT(18)
 #define USB2_ADPCTRL_IDPULLUP		BIT(5)	/* 1 = ID sampling is enabled */
 #define USB2_ADPCTRL_DRVVBUS		BIT(4)
 
@@ -191,11 +201,6 @@ static void rcar_gen3_set_linectrl(struct rcar_gen3_chan *ch, int dp, int dm)
 {
 	void __iomem *usb2_base = ch->base;
 	u32 val;
-	if (soc_device_match(rzt2h_match)) {
-		val = readl(usb2_base + USB2_VBCTRL);
-		val &= ~BIT(21);
-		writel(val, usb2_base + USB2_VBCTRL);
-	}
 
 	val = readl(usb2_base + USB2_LINECTRL1);
 
@@ -217,6 +222,11 @@ static void rcar_gen3_enable_vbus_ctrl(struct rcar_gen3_chan *ch, int vbus)
 
 	dev_vdbg(ch->dev, "%s: %08x, %d\n", __func__, val, vbus);
 	if (ch->soc_no_adp_ctrl) {
+		vbus_ctrl_reg = USB2_VBCTRL;
+		vbus_ctrl_val = USB2_VBCTRL_VBOUT;
+	}
+
+	if (soc_device_match(rzt2h_match)) {
 		vbus_ctrl_reg = USB2_VBCTRL;
 		vbus_ctrl_val = USB2_VBCTRL_VBOUT;
 	}
@@ -255,10 +265,7 @@ static void rcar_gen3_init_for_peri(struct rcar_gen3_chan *ch)
 {
 	rcar_gen3_set_linectrl(ch, 0, 1);
 	rcar_gen3_set_host_mode(ch, 0);
-	if (soc_device_match(rzt2h_match))
-		rcar_gen3_enable_vbus_ctrl(ch, 1);
-	else
-		rcar_gen3_enable_vbus_ctrl(ch, 0);
+	rcar_gen3_enable_vbus_ctrl(ch, 0);
 
 	ch->extcon_host = false;
 	schedule_work(&ch->work);
@@ -304,6 +311,16 @@ static bool rcar_gen3_check_id(struct rcar_gen3_chan *ch)
 
 	if (ch->soc_no_adp_ctrl)
 		return !!(readl(ch->base + USB2_LINECTRL1) & USB2_LINECTRL1_USB2_IDMON);
+
+#if !(SEL_OTG)
+	if (soc_device_match(rzt2h_match)) {
+		u32 status = readl(ch->base + USB2_ADPCTRL) & USB2_ADPCTRL_VBUSVALID;
+		if (status)
+			return true;
+		else
+			return false;
+	}
+#endif
 
 	return !!(readl(ch->base + USB2_ADPCTRL) & USB2_ADPCTRL_IDDIG);
 }
@@ -430,18 +447,29 @@ static void rcar_gen3_init_otg(struct rcar_gen3_chan *ch)
 	writel(val, usb2_base + USB2_LINECTRL1);
 
 	if (!ch->soc_no_adp_ctrl) {
-		val = readl(usb2_base + USB2_VBCTRL);
-		val &= ~USB2_VBCTRL_OCCLREN;
-		if (soc_device_match(rzt2h_match))
-			writel(val | BIT(21), usb2_base + USB2_VBCTRL);
-		else
+		if (soc_device_match(rzt2h_match)) {
+			val = readl(usb2_base + USB2_VBCTRL);
+			writel(val | USB2_VBCTRL_VBLVL, usb2_base + USB2_VBCTRL);
+			val = readl(usb2_base + USB2_ADPCTRL);
+#if (SEL_OTG)
+			writel(val | USB2_ADPCTRL_IDPULLUP | USB2_ADPCTRL_DRVVBUS,
+							usb2_base + USB2_ADPCTRL);
+#else
+			writel(val | USB2_ADPCTRL_DRVVBUS, usb2_base + USB2_ADPCTRL);
+#endif
+		} else {
+			val = readl(usb2_base + USB2_VBCTRL);
+			val &= ~USB2_VBCTRL_OCCLREN;
 			writel(val | USB2_VBCTRL_DRVVBUSSEL, usb2_base + USB2_VBCTRL);
-		val = readl(usb2_base + USB2_ADPCTRL);
-		writel(val | USB2_ADPCTRL_IDPULLUP, usb2_base + USB2_ADPCTRL);
+			val = readl(usb2_base + USB2_ADPCTRL);
+			writel(val | USB2_ADPCTRL_IDPULLUP, usb2_base + USB2_ADPCTRL);
+		}
 	}
+
 	msleep(20);
 
 	writel(0xffffffff, usb2_base + USB2_OBINTSTA);
+
 	writel(ch->obint_enable_bits, usb2_base + USB2_OBINTEN);
 
 	rcar_gen3_device_recognition(ch);
@@ -456,11 +484,20 @@ static irqreturn_t rcar_gen3_phy_usb2_irq(int irq, void *_ch)
 
 	if (status & ch->obint_enable_bits) {
 		dev_vdbg(ch->dev, "%s: %08x\n", __func__, status);
-		if (soc_device_match(rzt2h_match))
-			writel(0xffffffff, usb2_base + USB2_OBINTSTA);
-		else
+		if (!soc_device_match(rzt2h_match))
 			writel(ch->obint_enable_bits, usb2_base + USB2_OBINTSTA);
+
 		rcar_gen3_device_recognition(ch);
+
+		if (soc_device_match(rzt2h_match)) {
+			writel(0xffffffff, usb2_base + USB2_OBINTSTA);
+
+			if (readl(ch->base + USB2_VBCTRL) & USB2_VBCTRL_VBSTA)
+				writel(readl(ch->base + USB2_VBCTRL) & ~USB2_VBCTRL_VBLVL, ch->base + USB2_VBCTRL);
+			else
+				writel(readl(ch->base + USB2_VBCTRL) | USB2_VBCTRL_VBLVL, ch->base + USB2_VBCTRL);
+		}
+
 		ret = IRQ_HANDLED;
 	}
 
