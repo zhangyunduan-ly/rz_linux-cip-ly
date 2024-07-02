@@ -3367,6 +3367,10 @@ static const struct of_device_id rzg2l_pinctrl_of_table[] = {
 		.data = &r9a08g045_data,
 	},
 	{
+		.compatible = "renesas,r9a09g056-pinctrl",
+		.data = &r9a09g057_data,
+	},
+	{
 		.compatible = "renesas,r9a09g057-pinctrl",
 		.data = &r9a09g057_data,
 	},
