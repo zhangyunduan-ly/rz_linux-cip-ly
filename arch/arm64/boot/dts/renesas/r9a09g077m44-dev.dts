@@ -11,6 +11,13 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/net/rzt2h-ethss.h>
 
+/*
+ * Select SDHI0 or eMMC support
+ * SEL_SD0 = 0: SDHI
+ * SEL_SDO = 1: eMMC (default)
+ */
+#define SEL_SD0		1
+
 / {
 	model = "Renesas Development EVK based on r9a09g077m44";
 	compatible = "renesas,r9a09g077m44-dev", "renesas,r9a09g077m44", "renesas,r9a09g077";
@@ -135,7 +142,8 @@
 
 		sd0_ctrl {
 			pinmux = <RZT2H_PORT_PINMUX(12, 0, 0x29)>, /* SD0_CLK */
-				 <RZT2H_PORT_PINMUX(12, 1, 0x29)>; /* SD0_CMD */
+				 <RZT2H_PORT_PINMUX(12, 1, 0x29)>, /* SD0_CMD */
+				 <RZT2H_PORT_PINMUX(22, 5, 0x29)>; /* SD0_CD  */
 		};
 	};
 
@@ -149,7 +157,8 @@
 
 		sd1_ctrl {
 			pinmux = <RZT2H_PORT_PINMUX(16, 5, 0x29)>, /* SD1_CLK */
-				 <RZT2H_PORT_PINMUX(16, 6, 0x29)>; /* SD1_CMD */
+				 <RZT2H_PORT_PINMUX(16, 6, 0x29)>, /* SD1_CMD */
+				 <RZT2H_PORT_PINMUX(17, 4, 0x29)>; /* SD1_CD  */
 		};
 	};
 
@@ -227,6 +236,16 @@
 	status = "okay";
 };
 
+#if (SEL_SD0)
+&sdhi0 {
+	vmmc-supply = <&reg_3p3v>;
+	vqmmc-supply = <&reg_1p8v>;
+	bus-width = <1>;
+	non-removable;
+	fixed-emmc-driver-type = <1>;
+	status = "okay";
+};
+#else
 &sdhi0 {
 	pinctrl-0 = <&sdhi0_pins>;
 	pinctrl-names = "default";
@@ -234,9 +253,9 @@
 	vmmc-supply = <&reg_3p3v>;
 	vqmmc-supply = <&vccq_sdhi0>;
 	bus-width = <4>;
-	non-removable;
 	status = "okay";
 };
+#endif
 
 &sdhi1 {
 	pinctrl-0 = <&sdhi1_pins>;
@@ -245,7 +264,6 @@
 	vmmc-supply = <&reg_3p3v>;
 	vqmmc-supply = <&vccq_sdhi1>;
 	bus-width = <4>;
-	non-removable;
 	status = "okay";
 };
 
