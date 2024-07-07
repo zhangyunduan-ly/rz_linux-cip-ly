@@ -241,11 +241,76 @@
 			 <RZT2H_PORT_PINMUX(26, 2, 0x10)>;      /* MDIO1_MDIO */
 	};
 
+	ethsw_pins: ethsw_pins {
+		pinmux = <RZT2H_PORT_PINMUX(21, 4, 0x11)>,      /* ETHSW_MDC */
+			 <RZT2H_PORT_PINMUX(21, 5, 0x11)>,      /* ETHSW_MDIO */
+			 <RZT2H_PORT_PINMUX(21, 6, 0x11)>,      /* ETHSW_PHYLINK0 */
+			 <RZT2H_PORT_PINMUX(26, 3, 0x11)>,      /* ETHSW_PHYLINK1 */
+			 <RZT2H_PORT_PINMUX(30, 7, 0x11)>;      /* ETHSW_PHYLINK2 */
+};
+
 	pins_refclk: pins_refclk {
 		pinmux = <RZT2H_PORT_PINMUX(21, 7, 0x02)>,	/* ETH0_REFCLK */
 			 <RZT2H_PORT_PINMUX(26, 4, 0x02)>,	/* ETH1_REFCLK */
 			 <RZT2H_PORT_PINMUX(31, 0, 0x02)>,	/* ETH2_REFCLK */
 			 <RZT2H_PORT_PINMUX(34, 6, 0x02)>;	/* ETH3_REFCLK */
+	};
+
+	eth0_pins: ethss_0 {
+		pinmux = <RZT2H_PORT_PINMUX(20, 0, 0x0F)>,      /* ETH0_TXCLK */
+			 <RZT2H_PORT_PINMUX(20, 1, 0x0F)>,      /* ETH0_TXD[0] */
+			 <RZT2H_PORT_PINMUX(20, 2, 0x0F)>,      /* ETH0_TXD[1] */
+			 <RZT2H_PORT_PINMUX(20, 3, 0x0F)>,      /* ETH0_TXD[2] */
+			 <RZT2H_PORT_PINMUX(20, 4, 0x0F)>,      /* ETH0_TXD[3] */
+			 <RZT2H_PORT_PINMUX(20, 5, 0x0F)>,      /* ETH0_TXEN */
+			 <RZT2H_PORT_PINMUX(20, 6, 0x0F)>,      /* ETH0_RXCLK */
+			 <RZT2H_PORT_PINMUX(20, 7, 0x0F)>,      /* ETH0_RXD[0] */
+			 <RZT2H_PORT_PINMUX(21, 0, 0x0F)>,      /* ETH0_RXD[1] */
+			 <RZT2H_PORT_PINMUX(21, 1, 0x0F)>,      /* ETH0_RXD[2] */
+			 <RZT2H_PORT_PINMUX(21, 2, 0x0F)>,      /* ETH0_RXD[3] */
+			 <RZT2H_PORT_PINMUX(21, 3, 0x0F)>,      /* ETH0_RXDV */
+			 <RZT2H_PORT_PINMUX(22, 1, 0x0F)>,      /* ETH0_TXER */
+			 <RZT2H_PORT_PINMUX(22, 2, 0x0F)>,      /* ETH0_RXER */
+			 <RZT2H_PORT_PINMUX(22, 3, 0x0F)>,      /* ETH0_CRS */
+			 <RZT2H_PORT_PINMUX(22, 4, 0x0F)>;      /* ETH0_COL */
+	};
+
+	eth1_pins: ethss_1 {
+		pinmux = <RZT2H_PORT_PINMUX(24, 5, 0x0F)>,      /* ETH1_TXCLK */
+			 <RZT2H_PORT_PINMUX(24, 6, 0x0F)>,      /* ETH1_TXD[0] */
+			 <RZT2H_PORT_PINMUX(24, 7, 0x0F)>,      /* ETH1_TXD[1] */
+			 <RZT2H_PORT_PINMUX(25, 0, 0x0F)>,      /* ETH1_TXD[2] */
+			 <RZT2H_PORT_PINMUX(25, 1, 0x0F)>,      /* ETH1_TXD[3] */
+			 <RZT2H_PORT_PINMUX(25, 2, 0x0F)>,      /* ETH1_TXEN */
+			 <RZT2H_PORT_PINMUX(25, 3, 0x0F)>,      /* ETH1_RXCLK */
+			 <RZT2H_PORT_PINMUX(25, 4, 0x0F)>,      /* ETH1_RXD[0] */
+			 <RZT2H_PORT_PINMUX(25, 5, 0x0F)>,      /* ETH1_RXD[1] */
+			 <RZT2H_PORT_PINMUX(25, 6, 0x0F)>,      /* ETH1_RXD[2] */
+			 <RZT2H_PORT_PINMUX(25, 7, 0x0F)>,      /* ETH1_RXD[3] */
+			 <RZT2H_PORT_PINMUX(26, 0, 0x0F)>,      /* ETH1_RXDV */
+			 <RZT2H_PORT_PINMUX(26, 6, 0x0F)>,      /* ETH1_TXER */
+			 <RZT2H_PORT_PINMUX(26, 7, 0x0F)>,      /* ETH1_RXER */
+			 <RZT2H_PORT_PINMUX(27, 0, 0x0F)>,      /* ETH1_CRS */
+			 <RZT2H_PORT_PINMUX(27, 1, 0x0F)>;      /* ETH1_COL */
+	};
+
+	eth2_pins: ethss_2 {
+		pinmux = <RZT2H_PORT_PINMUX(29, 1, 0x0F)>,      /* ETH2_TXCLK */
+			 <RZT2H_PORT_PINMUX(29, 2, 0x0F)>,      /* ETH2_TXD[0] */
+			 <RZT2H_PORT_PINMUX(29, 3, 0x0F)>,      /* ETH2_TXD[1] */
+			 <RZT2H_PORT_PINMUX(29, 4, 0x0F)>,      /* ETH2_TXD[2] */
+			 <RZT2H_PORT_PINMUX(29, 5, 0x0F)>,      /* ETH2_TXD[3] */
+			 <RZT2H_PORT_PINMUX(29, 6, 0x0F)>,      /* ETH2_TXEN */
+			 <RZT2H_PORT_PINMUX(29, 7, 0x0F)>,      /* ETH2_RXCLK */
+			 <RZT2H_PORT_PINMUX(30, 0, 0x0F)>,      /* ETH2_RXD[0] */
+			 <RZT2H_PORT_PINMUX(30, 1, 0x0F)>,      /* ETH2_RXD[1] */
+			 <RZT2H_PORT_PINMUX(30, 2, 0x0F)>,      /* ETH2_RXD[2] */
+			 <RZT2H_PORT_PINMUX(30, 3, 0x0F)>,      /* ETH2_RXD[3] */
+			 <RZT2H_PORT_PINMUX(30, 4, 0x0F)>,      /* ETH2_RXDV */
+			 <RZT2H_PORT_PINMUX(31, 2, 0x0F)>,      /* ETH2_TXER */
+			 <RZT2H_PORT_PINMUX(31, 3, 0x0F)>,      /* ETH2_RXER */
+			 <RZT2H_PORT_PINMUX(31, 4, 0x0F)>,      /* ETH2_CRS */
+			 <RZT2H_PORT_PINMUX(31, 5, 0x0F)>;      /* ETH2_COL */
 	};
 
 	eth3_pins: ethss_3 {
@@ -445,6 +510,16 @@
 	timeout-sec = <60>;
 };
 
+&gmac0 {
+	status = "okay";
+	phy-mode = "gmii";
+
+	fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+};
+
 &gmac1 {
 	phy-handle = <&phy3>;
 	phy-mode = "mii";
@@ -469,8 +544,69 @@
 &ethss {
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pins_refclk>, <&eth3_pins>;
+	pinctrl-0 = <&pins_refclk>, <&eth0_pins>, <&eth1_pins>, <&eth2_pins>, <&eth3_pins>;
 	renesas,ethss-switch-portmanagement = <ETHSS_GMAC0_PORT>;
+};
+
+&ethsw {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	phy-reset-gpios = <&pinctrl RZT2H_GPIO(11, 0) GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&ethsw_pins>;
+
+	dsa,member = <0 0>;
+
+	mdio {
+		clock-frequency = <2500000>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		phy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-id0007.0772";
+			phy-mode = "mii";
+			reg = <0>;
+		};
+
+		phy1: ethernet-phy@1 {
+			compatible = "ethernet-phy-id0007.0772";
+			phy-mode = "mii";
+			reg = <1>;
+		};
+
+		phy2: ethernet-phy@2 {
+			compatible = "ethernet-phy-id0007.0772";
+			phy-mode = "mii";
+			reg = <2>;
+		};
+};
+};
+
+&switch_port0 {
+	label = "lan0";
+	phy-mode = "mii";
+	phy-handle = <&phy0>;
+	status = "okay";
+};
+
+&switch_port1 {
+	label = "lan1";
+	phy-mode = "mii";
+	phy-handle = <&phy1>;
+	status = "okay";
+};
+
+&switch_port2 {
+	label = "lan2";
+	phy-mode = "mii";
+	phy-handle = <&phy2>;
+	status = "okay";
+};
+
+&switch_port3 {
+	status = "okay";
 };
 
 &mii_conv0 {
