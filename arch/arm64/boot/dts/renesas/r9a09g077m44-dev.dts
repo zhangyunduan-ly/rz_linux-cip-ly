@@ -346,6 +346,7 @@
 	vmmc-supply = <&reg_3p3v>;
 	vqmmc-supply = <&vccq_sdhi0>;
 	bus-width = <4>;
+	sd-uhs-sdr50;
 	status = "okay";
 };
 #endif
@@ -357,6 +358,7 @@
 	vmmc-supply = <&reg_3p3v>;
 	vqmmc-supply = <&vccq_sdhi1>;
 	bus-width = <4>;
+	sd-uhs-sdr50;
 	status = "okay";
 };
 
