@@ -50,8 +50,8 @@ enum clk_ids {
 };
 
 static const struct clk_div_table dtable_1_2[] = {
-	{0, 1},
-	{1, 2},
+	{0, 2},
+	{0xF, 1},
 	{0, 0},
 };
 
@@ -93,7 +93,7 @@ static const char * const sel_clk_pll2[] = { ".sel_loco", ".sel_pll2" };
 static const char * const sel_clk_pll4[] = { ".sel_loco", ".sel_pll4" };
 
 static const struct {
-	struct cpg_core_clk common[48];
+	struct cpg_core_clk common[45];
 } core_clks __initconst = {
 	.common = {
 		/* External Clock Inputs */
@@ -121,13 +121,7 @@ static const struct {
 		DEF_SAMPLL(".pll3", CLK_PLL3, CLK_PLL3_INPUT, PLL3_CONF),
 
 		/* Core output clk */
-		DEF_DIV("CA55_0",  R9A09G077_CA55C0, CLK_SEL_CLK_PLL0, DIVCA550,
-					dtable_1_2, CLK_DIVIDER_HIWORD_MASK, 1),
-		DEF_DIV("CA55_1", R9A09G077_CA55C1, CLK_SEL_CLK_PLL0, DIVCA551,
-					dtable_1_2, CLK_DIVIDER_HIWORD_MASK, 1),
-		DEF_DIV("CA55_2", R9A09G077_CA55C2, CLK_SEL_CLK_PLL0, DIVCA552,
-					dtable_1_2, CLK_DIVIDER_HIWORD_MASK, 1),
-		DEF_DIV("CA55_3", R9A09G077_CA55C3, CLK_SEL_CLK_PLL0, DIVCA553,
+		DEF_DIV("CA55", R9A09G077_CA55, CLK_SEL_CLK_PLL0, DIVCA55,
 					dtable_1_2, CLK_DIVIDER_HIWORD_MASK, 1),
 		DEF_FIXED("SDHIHS", R9A09G077_SDHIHS, CLK_SEL_CLK_PLL2, 1, 1),
 		DEF_FIXED(".osc_eth_phy", CLK_OSC_ETH_PHY, CLK_EXTAL, 1, 1),
@@ -169,19 +163,11 @@ static const struct {
 };
 
 static const struct {
-	struct rzt2_mod_clk common[53];
+	struct rzt2_mod_clk common[49];
 } mod_clks = {
 	.common = {
 		DEF_MOD("sci0",         R9A09G077_SCI0_CLK, R9A09G077_PCLKM,
 					0x300, 8, 0),
-		DEF_MOD("ca550",	R9A09G077_CA55_CORE0_CLK, R9A09G077_CA55C0,
-					0x334, 2, 1),
-		DEF_MOD("ca551",	R9A09G077_CA55_CORE1_CLK, R9A09G077_CA55C1,
-					0x334, 3, 1),
-		DEF_MOD("ca552",	R9A09G077_CA55_CORE2_CLK, R9A09G077_CA55C2,
-					0x334, 4, 1),
-		DEF_MOD("ca553",	R9A09G077_CA55_CORE3_CLK, R9A09G077_CA55C3,
-					0x334, 5, 1),
 		DEF_MOD("lcdc",		R9A09G077_LCDC_CLK, R9A09G077_LCDC_CLKD,
 					0x330, 4, 0),
 		DEF_MOD("pcie",		R9A09G077_PCIE_CLK, R9A09G077_PCLKAH,

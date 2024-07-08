@@ -45,10 +45,7 @@
 #define DDIV_PACK(offset, bitpos, size) \
 		(((offset) << 20) | ((bitpos) << 12) | ((size) << 8))
 
-#define DIVCA550		DDIV_PACK(SCKCR2, 8, 1)
-#define DIVCA551		DDIV_PACK(SCKCR2, 9, 1)
-#define DIVCA552		DDIV_PACK(SCKCR2, 10, 1)
-#define DIVCA553		DDIV_PACK(SCKCR2, 11, 1)
+#define DIVCA55			DDIV_PACK(SCKCR2, 8, 4)
 #define DIVCA55S		DDIV_PACK(SCKCR2, 12, 1)
 #define DIVCR520		DDIV_PACK(SCKCR2, 2, 2)
 #define DIVCR521		DDIV_PACK(SCKCR2, 0, 2)
