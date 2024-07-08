@@ -25,6 +25,13 @@
  */
 #define SEL_RSPI_ETHSS		1
 
+/*
+ * Set SEL_ETHSW_LCDC to below values to select using of:
+ * - 0: ETHSW
+ * - 1: LCDC (default)
+ */
+#define SEL_ETHSW_LCDC		1
+
 / {
 	model = "Renesas Development EVK based on r9a09g077m44";
 	compatible = "renesas,r9a09g077m44-dev", "renesas,r9a09g077m44", "renesas,r9a09g077";
@@ -127,6 +134,7 @@
 };
 
 &pinctrl {
+#if (SEL_ETHSW_LCDC)
 	du_pins: du {
 		du_data {
 			pinmux = <RZT2H_PORT_PINMUX(10, 0, 0x28)>, /* LCDC_DATR0 */
@@ -172,7 +180,7 @@
 			drive-strength = <3>;
 		};
 	};
-
+#endif
 	sci0_pins: sci0 {
 		pinmux = <RZT2H_PORT_PINMUX(27, 5, 0x14)>, /* SCI0_TXD */
 			 <RZT2H_PORT_PINMUX(27, 4, 0x14)>; /* SCI0_RXD */
@@ -256,7 +264,7 @@
 			 <RZT2H_PORT_PINMUX(21, 6, 0x11)>,      /* ETHSW_PHYLINK0 */
 			 <RZT2H_PORT_PINMUX(26, 3, 0x11)>,      /* ETHSW_PHYLINK1 */
 			 <RZT2H_PORT_PINMUX(30, 7, 0x11)>;      /* ETHSW_PHYLINK2 */
-};
+	};
 
 	pins_refclk: pins_refclk {
 		pinmux = <RZT2H_PORT_PINMUX(21, 7, 0x02)>,	/* ETH0_REFCLK */
@@ -563,6 +571,7 @@
 };
 #endif
 
+#if !(SEL_ETHSW_LCDC)
 &ethsw {
 	status = "okay";
 	#address-cells = <1>;
@@ -596,8 +605,9 @@
 			phy-mode = "mii";
 			reg = <2>;
 		};
+	};
 };
-};
+
 
 &switch_port0 {
 	label = "lan0";
@@ -623,6 +633,7 @@
 &switch_port3 {
 	status = "okay";
 };
+#endif
 
 &mii_conv0 {
 	renesas,ethss-port = <ETHSS_SWITCH_PORT0>;
@@ -668,6 +679,7 @@
 	status = "okay";
 };
 
+#if (SEL_ETHSW_LCDC)
 &du {
 	pinctrl-0 = <&du_pins>;
 	pinctrl-names = "default";
@@ -682,6 +694,7 @@
 		};
 	};
 };
+#endif
 
 &rtc {
 	status = "okay";
