@@ -50,6 +50,22 @@
 
 #define POEG_SUPPORT		1
 
+/*
+ * MTU3 macros are created to support setting pinctrl and properties in order
+ * to use MTU3 functions.
+ * MTU3_PWM_SUPPORT: Enable to support PWM of MTU3. By default, PWM mode 1 of
+ * MTU3 channel2 and channel3 will be selected.
+ * MTU3_PWM_COMPLEMENTARY_SELECT: Enable this macro to select complementary PWM
+ * mode of MTU3 channel3 instead of PWM mode 1.
+ * MTU3_PHASE_COUNTING_SUPPORT: Enable to support phase counting functions.
+ * MTU3_32BIT_PHASE_COUNTING_SELECT: Select 32-bit phase counting mode; this
+ * macro is used along with MTU3_PHASE_COUNTING_SUPPORT.
+ */
+#define MTU3_PWM_SUPPORT			1
+#define MTU3_PWM_COMPLEMENTARY_SELECT		1
+#define MTU3_PHASE_COUNTING_SUPPORT		0
+#define MTU3_32BIT_PHASE_COUNTING_SELECT	0
+
 / {
 	model = "Renesas Development EVK based on r9a09g077m44";
 	compatible = "renesas,r9a09g077m44-dev", "renesas,r9a09g077m44", "renesas,r9a09g077";
@@ -460,6 +476,33 @@
 	adc2_pins: adc2 {
 		pinmux = <RZT2H_PORT_PINMUX(4, 6, 0x1f)>; /* ADCTRG2# */
 	};
+
+#if (MTU3_PWM_SUPPORT || MTU3_PHASE_COUNTING_SUPPORT)
+	mtu3_pins: mtu3 {
+		pinmux =
+#if MTU3_PHASE_COUNTING_SUPPORT
+#if MTU3_32BIT_PHASE_COUNTING_SELECT
+			<RZT2H_PORT_PINMUX(3, 2, 0x07)>, /* MTIOC1A */
+#endif
+			<RZT2H_PORT_PINMUX(0, 6, 0x06)>, /* MTCLKA */
+#if !MTU3_PWM_SUPPORT
+			<RZT2H_PORT_PINMUX(0, 7, 0x06)>; /* MTCLKB */
+#else
+			<RZT2H_PORT_PINMUX(0, 7, 0x06)>, /* MTCLKB */
+#endif
+#endif
+#if MTU3_PWM_SUPPORT
+			<RZT2H_PORT_PINMUX(3, 5, 0x06)>, /* MTIOC3A */
+			<RZT2H_PORT_PINMUX(3, 7, 0x06)>, /* MTIOC6B */
+			<RZT2H_PORT_PINMUX(3, 6, 0x06)>, /* MTIOC3C */
+#if !MTU3_PWM_COMPLEMENTARY_SELECT
+			<RZT2H_PORT_PINMUX(27, 3, 0x06)>; /* MTIOC2A */
+#else
+			<RZT2H_PORT_PINMUX(4, 0, 0x06)>; /* MTIOC6D */
+#endif
+#endif
+	};
+#endif
 
 #if !(SEL_SCI1_LCDC)
 	sci1_pins: sci1 {
@@ -929,3 +972,31 @@
 	status = "okay";
 };
 #endif
+
+&mtu3 {
+#if (MTU3_PWM_SUPPORT || MTU3_PHASE_COUNTING_SUPPORT)
+	pinctrl-0 = <&mtu3_pins>;
+	pinctrl-names = "default";
+#endif
+
+#if MTU3_PWM_SUPPORT
+#if MTU3_PWM_COMPLEMENTARY_SELECT
+	/* Enable PWM complementary at MTIOC6B and MTIOC6D pins. */
+	pwm_complementary = <6 1>;
+#else
+	/* Enable PWM output at MTIOC2A and MTIOC3C pins. */
+	pwm_mode1 = <2 0>, <3 1>;
+#endif
+#endif
+
+#if MTU3_PHASE_COUNTING_SUPPORT
+#if MTU3_32BIT_PHASE_COUNTING_SELECT
+	/* Enable 1 32-bit phase counter by using both MTU1 and MTU2. */
+	32-bit_phase_counting;
+#else
+	/* Enable 2 16-bit phase counters for MTU1 and MTU2. */
+	16-bit_phase_counting = <1 2>;
+#endif
+#endif
+	status = "okay";
+};
