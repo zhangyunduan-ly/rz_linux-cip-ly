@@ -343,6 +343,9 @@
 			 <RZT2H_PORT_PINMUX(22, 2, 0x0F)>,      /* ETH0_RXER */
 			 <RZT2H_PORT_PINMUX(22, 3, 0x0F)>,      /* ETH0_CRS */
 			 <RZT2H_PORT_PINMUX(22, 4, 0x0F)>;      /* ETH0_COL */
+			input-schmitt-disable;
+			slew-rate       = <1>;
+			drive-strength  = <3>;
 	};
 
 	eth1_pins: ethss_1 {
@@ -362,6 +365,9 @@
 			 <RZT2H_PORT_PINMUX(26, 7, 0x0F)>,      /* ETH1_RXER */
 			 <RZT2H_PORT_PINMUX(27, 0, 0x0F)>,      /* ETH1_CRS */
 			 <RZT2H_PORT_PINMUX(27, 1, 0x0F)>;      /* ETH1_COL */
+			input-schmitt-disable;
+			slew-rate       = <1>;
+			drive-strength  = <3>;
 	};
 
 #if (SEL_RSPI_ETHSS)
@@ -382,6 +388,9 @@
 			 <RZT2H_PORT_PINMUX(31, 3, 0x0F)>,      /* ETH2_RXER */
 			 <RZT2H_PORT_PINMUX(31, 4, 0x0F)>,      /* ETH2_CRS */
 			 <RZT2H_PORT_PINMUX(31, 5, 0x0F)>;      /* ETH2_COL */
+			input-schmitt-disable;
+			slew-rate       = <1>;
+			drive-strength  = <3>;
 	};
 #endif
 
@@ -402,6 +411,9 @@
 			 <RZT2H_PORT_PINMUX(35, 0, 0x0F)>,	/* ETH3_RXER */
 			 <RZT2H_PORT_PINMUX(35, 1, 0x0F)>,	/* ETH3_CRS */
 			 <RZT2H_PORT_PINMUX(35, 2, 0x0F)>;	/* ETH3_COL */
+			input-schmitt-disable;
+			slew-rate       = <1>;
+			drive-strength  = <3>;
 	};
 
 	usb_exicen_a {
