@@ -18,6 +18,13 @@
  */
 #define SEL_SD0		1
 
+/*
+ * Set SEL_RSPI_ETHSS to below values to select using of:
+ * - 0: RSPI0
+ * - 1: ETHSS (default)
+ */
+#define SEL_RSPI_ETHSS		1
+
 / {
 	model = "Renesas Development EVK based on r9a09g077m44";
 	compatible = "renesas,r9a09g077m44-dev", "renesas,r9a09g077m44", "renesas,r9a09g077";
@@ -229,12 +236,14 @@
 			<RZT2H_PORT_PINMUX(4, 7, 0x17)>; /* SCL */
 	};
 
+#if (!SEL_RSPI_ETHSS)
 	spi0_pins: spi0 {
 		pinmux = <RZT2H_PORT_PINMUX(31, 4, 0x1A)>, /* SSL */
 			<RZT2H_PORT_PINMUX(31, 5, 0x1A)>, /* SCK */
 			<RZT2H_PORT_PINMUX(31, 6, 0x1A)>, /* MOSI */
 			<RZT2H_PORT_PINMUX(31, 7, 0x1A)>; /* MISO */
 	};
+#endif
 
 	mdio1_pins: gmac_mdio1 {
 		pinmux = <RZT2H_PORT_PINMUX(26, 1, 0x10)>,      /* MDIO1_MDC */
@@ -294,6 +303,7 @@
 			 <RZT2H_PORT_PINMUX(27, 1, 0x0F)>;      /* ETH1_COL */
 	};
 
+#if (SEL_RSPI_ETHSS)
 	eth2_pins: ethss_2 {
 		pinmux = <RZT2H_PORT_PINMUX(29, 1, 0x0F)>,      /* ETH2_TXCLK */
 			 <RZT2H_PORT_PINMUX(29, 2, 0x0F)>,      /* ETH2_TXD[0] */
@@ -312,6 +322,7 @@
 			 <RZT2H_PORT_PINMUX(31, 4, 0x0F)>,      /* ETH2_CRS */
 			 <RZT2H_PORT_PINMUX(31, 5, 0x0F)>;      /* ETH2_COL */
 	};
+#endif
 
 	eth3_pins: ethss_3 {
 		pinmux = <RZT2H_PORT_PINMUX(33, 2, 0x0F)>,	/* ETH3_TXCLK */
@@ -433,12 +444,14 @@
 	status = "okay";
 };
 
+#if (!SEL_RSPI_ETHSS)
 &spi0 {
 	pinctrl-0 = <&spi0_pins>;
 	pinctrl-names = "default";
 
 	status = "okay";
 };
+#endif
 
 &i2c0 {
 	pinctrl-0 = <&i2c0_pins>;
@@ -541,12 +554,14 @@
 	};
 };
 
+#if (SEL_RSPI_ETHSS)
 &ethss {
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins_refclk>, <&eth0_pins>, <&eth1_pins>, <&eth2_pins>, <&eth3_pins>;
 	renesas,ethss-switch-portmanagement = <ETHSS_GMAC0_PORT>;
 };
+#endif
 
 &ethsw {
 	status = "okay";
