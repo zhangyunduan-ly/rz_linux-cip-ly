@@ -66,6 +66,13 @@
 #define MTU3_PHASE_COUNTING_SUPPORT		0
 #define MTU3_32BIT_PHASE_COUNTING_SELECT	0
 
+/*
+ * POE3_SUPPORT is used to enable POE3 to control Hi-Z state of complementary
+ * PWM signals. Note: This macro must be enabled along with macros MTU3_PWM_SUPPORT
+ * and MTU3_PWM_COMPLEMENTARY_SELECT to fully take effect.
+ */
+#define POE3_SUPPORT		1
+
 / {
 	model = "Renesas Development EVK based on r9a09g077m44";
 	compatible = "renesas,r9a09g077m44-dev", "renesas,r9a09g077m44", "renesas,r9a09g077";
@@ -501,6 +508,12 @@
 			<RZT2H_PORT_PINMUX(4, 0, 0x06)>; /* MTIOC6D */
 #endif
 #endif
+	};
+#endif
+
+#if POE3_SUPPORT
+	poe3_pins: poe3 {
+		pinmux = <RZT2H_PORT_PINMUX(2, 4, 0x08)>; /* POE0# */
 	};
 #endif
 
@@ -1000,3 +1013,20 @@
 #endif
 	status = "okay";
 };
+
+#if (MTU3_PWM_SUPPORT && MTU3_PWM_COMPLEMENTARY_SELECT && POE3_SUPPORT)
+&poe3 {
+	pinctrl-0 = <&poe3_pins>;
+	pinctrl-names = "default";
+	poe3_pins_mode = <0 0>, <4 0>, <8 0>, <10 0>;
+	oscillation_detection = <1>;
+	status = "okay";
+	mtu3_ch67 {
+		mtu3_outputs = <0>;
+		addition_poe3_inputs = <0>;
+		mtioc6b_pin_select = <1>;
+		mtioc6d_pin_select = <1>;
+		dsmif_error_detection = <0 0>, <0 5>, <1 0>, <1 9>;
+	};
+};
+#endif
