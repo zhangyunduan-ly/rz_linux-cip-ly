@@ -32,6 +32,13 @@
  */
 #define SEL_ETHSW_LCDC		1
 
+/*
+ *  Select SCI or LCDC support
+ *  SEL_SCI1_LCDC=0: SCI1
+ *  SEL_SCI1_LCDC=1: LCDC (default)
+ */
+#define SEL_SCI1_LCDC		1
+
 / {
 	model = "Renesas Development EVK based on r9a09g077m44";
 	compatible = "renesas,r9a09g077m44-dev", "renesas,r9a09g077m44", "renesas,r9a09g077";
@@ -39,6 +46,7 @@
 
 	aliases {
 		serial0 = &sci0;
+		serial1 = &sci1;
 		mmc0 = &sdhi0;
 		mmc1 = &sdhi1;
 		i2c0 = &i2c0;
@@ -134,7 +142,7 @@
 };
 
 &pinctrl {
-#if (SEL_ETHSW_LCDC)
+#if (SEL_ETHSW_LCDC && SEL_SCI1_LCDC)
 	du_pins: du {
 		du_data {
 			pinmux = <RZT2H_PORT_PINMUX(10, 0, 0x28)>, /* LCDC_DATR0 */
@@ -430,6 +438,14 @@
 	adc2_pins: adc2 {
 		pinmux = <RZT2H_PORT_PINMUX(4, 6, 0x1f)>; /* ADCTRG2# */
 	};
+
+#if !(SEL_SCI1_LCDC)
+	sci1_pins: sci1 {
+		pinmux = <RZT2H_PORT_PINMUX(18, 4, 0x14)>, /* SCI1_TXD */
+			 <RZT2H_PORT_PINMUX(18, 3, 0x14)>; /* SCI1_RXD */
+		bias-pull-up;
+	};
+#endif
 };
 
 &extal {
@@ -713,7 +729,7 @@
 	status = "okay";
 };
 
-#if (SEL_ETHSW_LCDC)
+#if (SEL_ETHSW_LCDC && SEL_SCI1_LCDC)
 &du {
 	pinctrl-0 = <&du_pins>;
 	pinctrl-names = "default";
@@ -851,3 +867,11 @@
 		};
 	};
 };
+
+#if !(SEL_SCI1_LCDC)
+&sci1 {
+	pinctrl-0 = <&sci1_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+#endif
