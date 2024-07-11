@@ -16,6 +16,7 @@
 #include <linux/pinctrl/pinctrl.h>
 #include <linux/pinctrl/pinmux.h>
 #include <linux/spinlock.h>
+#include <linux/mutex.h>
 
 #include <dt-bindings/pinctrl/rzt2h-pinctrl.h>
 
@@ -101,6 +102,7 @@ struct rzt2h_pinctrl {
 
 	int safety_region;
 	spinlock_t			lock;
+	struct mutex                    mutex;
 };
 
 void rzt2h_pinctrl_writeb(struct rzt2h_pinctrl *pctrl, u8 port, u8 val, u16 offset)
@@ -356,11 +358,13 @@ static int rzt2h_dt_subnode_to_map(struct pinctrl_dev *pctldev,
 		psel_val[i] = MUX_FUNC(value);
 	}
 
+	mutex_lock(&pctrl->mutex);
+
 	/* Register a single pin group listing all the pins we read from DT */
 	gsel = pinctrl_generic_add_group(pctldev, np->name, pins, num_pinmux, NULL);
 	if (gsel < 0) {
 		ret = gsel;
-		goto done;
+		goto unlock;
 	}
 
 	/*
@@ -374,6 +378,8 @@ static int rzt2h_dt_subnode_to_map(struct pinctrl_dev *pctldev,
 		ret = fsel;
 		goto remove_group;
 	}
+
+	mutex_unlock(&pctrl->mutex);
 
 	maps[idx].type = PIN_MAP_TYPE_MUX_GROUP;
 	maps[idx].data.mux.group = np->name;
@@ -396,6 +402,10 @@ static int rzt2h_dt_subnode_to_map(struct pinctrl_dev *pctldev,
 
 remove_group:
 	pinctrl_generic_remove_group(pctldev, gsel);
+
+unlock:
+	mutex_unlock(&pctrl->mutex);
+
 done:
 	*index = idx;
 	kfree(configs);
@@ -1007,7 +1017,7 @@ static int rzt2h_pinctrl_probe(struct platform_device *pdev)
 	}
 
 	spin_lock_init(&pctrl->lock);
-
+	mutex_init(&pctrl->mutex);
 	platform_set_drvdata(pdev, pctrl);
 
 	ret = clk_prepare_enable(pctrl->clk);
