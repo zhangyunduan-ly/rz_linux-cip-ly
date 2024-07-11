@@ -44,7 +44,7 @@
 #define RTCA0YEAR	0x2c
 
 #define RTCA0SCMP	0x3c
-#define MAIN_CLK	24000000
+#define MAIN_CLK	25000000
 #define RTC_CLK		(MAIN_CLK / 128)
 
 #define RTCA0SECC	0x4c
