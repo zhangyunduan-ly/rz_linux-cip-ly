@@ -34,6 +34,13 @@
 #define SEL_ETHSW_LCDC		1
 
 /*
+ * Set SEL_ETHSS_PCIE to below values to select using of:
+ * - 0: PCIE
+ * - 1: ETHSS (default)
+ */
+#define SEL_ETHSS_PCIE		1
+
+/*
  *  Select SCI or LCDC support
  *  SEL_SCI1_LCDC=0: SCI1
  *  SEL_SCI1_LCDC=1: LCDC (default)
@@ -395,6 +402,7 @@
 	};
 #endif
 
+#if (SEL_ETHSS_PCIE)
 	eth3_pins: ethss_3 {
 		pinmux = <RZT2H_PORT_PINMUX(33, 2, 0x0F)>,	/* ETH3_TXCLK */
 			 <RZT2H_PORT_PINMUX(33, 3, 0x0F)>,	/* ETH3_TXD[0] */
@@ -416,7 +424,21 @@
 			slew-rate       = <1>;
 			drive-strength  = <3>;
 	};
+#else
+	pcie_rstout0 {
+		gpio-hog;
+		gpios = <RZT2H_GPIO(33, 3) GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "pcie_rstout0";
+	};
 
+	pcie_rstout1 {
+		gpio-hog;
+		gpios = <RZT2H_GPIO(33, 4) GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "pcie_rstout1";
+	};
+#endif
 	usb_exicen_a {
 		gpio-hog;
 		gpios = <RZT2H_GPIO(0, 2) GPIO_ACTIVE_HIGH>;
@@ -706,12 +728,18 @@
 	};
 };
 
-#if (SEL_RSPI_ETHSS)
+#if (SEL_RSPI_ETHSS && SEL_ETHSS_PCIE)
 &ethss {
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins_refclk>, <&eth0_pins>, <&eth1_pins>, <&eth2_pins>, <&eth3_pins>;
 	renesas,ethss-switch-portmanagement = <ETHSS_GMAC0_PORT>;
+};
+#endif
+
+#if (!SEL_ETHSS_PCIE)
+&pcie0 {
+	status = "okay";
 };
 #endif
 
