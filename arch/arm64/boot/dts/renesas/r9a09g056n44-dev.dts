@@ -401,6 +401,10 @@
 	status = "okay";
 };
 
+&usb3_phy0 {
+	status = "okay";
+};
+
 &xhci0 {
 	pinctrl-0 = <&usb30_pins>;
 	pinctrl-names = "default";
