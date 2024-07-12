@@ -858,7 +858,6 @@
 &xspi0 {
 	pinctrl-0 = <&xspi0_pins>;
 	pinctrl-names = "default";
-	renesas,xspi-8bit-dtr-swap;
 	status = "okay";
 
 	flash@0 {
@@ -866,8 +865,8 @@
 		reg = <0>;
 		m25p,fast-read;
 		spi-max-frequency = <50000000>;
-		spi-tx-bus-width = <8>;
-		spi-rx-bus-width = <8>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <1>;
 
 		partitions {
 			compatible = "fixed-partitions";
