@@ -734,6 +734,7 @@
 		phy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-id0007.0772";
 			phy-mode = "mii";
+			max-speed = <100>;
 			vsc8531,led-1-mode = <VSC8531_FORCE_LED_OFF>;
 			reg = <0>;
 		};
@@ -741,6 +742,7 @@
 		phy1: ethernet-phy@1 {
 			compatible = "ethernet-phy-id0007.0772";
 			phy-mode = "mii";
+			max-speed = <100>;
 			vsc8531,led-1-mode = <VSC8531_FORCE_LED_OFF>;
 			reg = <1>;
 		};
