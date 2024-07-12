@@ -53,6 +53,7 @@ struct renesas_rzt2h_eqos {
 
 	struct ethss *ethss;
 	struct ethss_port *ethss_port;
+	int ethsw_ptp_timer;
 };
 
 #endif
