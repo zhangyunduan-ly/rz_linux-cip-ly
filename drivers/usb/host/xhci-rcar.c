@@ -265,7 +265,9 @@ static const struct xhci_plat_priv xhci_plat_renesas_rzv2m = {
 };
 
 static const struct xhci_plat_priv xhci_plat_renesas_rzv2h = {
+	.quirks = XHCI_RESET_ON_RESUME,
 	.plat_start = xhci_rzv2h_start,
+	.resume_quirk = xhci_rzv2h_resume,
 };
 
 static const struct of_device_id usb_xhci_of_match[] = {

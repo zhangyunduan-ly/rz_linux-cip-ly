@@ -170,3 +170,9 @@ void xhci_rzv2h_start(struct usb_hcd *hcd)
 		writel(int_en, hcd->regs + USB3_HOST_INTEN);
 	}
 }
+
+int xhci_rzv2h_resume(struct usb_hcd *hcd)
+{
+	xhci_rzv2h_start(hcd);
+	return 0;
+}
