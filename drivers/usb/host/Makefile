@@ -25,6 +25,15 @@ xhci-plat-hcd-y := xhci-plat.o
 ifneq ($(CONFIG_USB_XHCI_MVEBU), )
 	xhci-plat-hcd-y		+= xhci-mvebu.o
 endif
+
+ifneq ($(CONFIG_USB_XHCI_RCAR), )
+	xhci-plat-hcd-y		+= xhci-rcar.o
+endif
+
+ifneq ($(CONFIG_USB_XHCI_RZV2H), )
+	xhci-plat-hcd-y		+= xhci-rzv2h.o
+endif
+
 ifneq ($(CONFIG_DEBUG_FS),)
 	xhci-hcd-y		+= xhci-debugfs.o
 endif
