@@ -89,6 +89,7 @@
 	aliases {
 		serial0 = &sci0;
 		serial1 = &sci1;
+		serial3 = &sci3;
 		mmc0 = &sdhi0;
 		mmc1 = &sdhi1;
 		i2c0 = &i2c0;
@@ -237,6 +238,11 @@
 	sci0_pins: sci0 {
 		pinmux = <RZT2H_PORT_PINMUX(27, 5, 0x14)>, /* SCI0_TXD */
 			 <RZT2H_PORT_PINMUX(27, 4, 0x14)>; /* SCI0_RXD */
+	};
+
+	sci3_pins: sci3 {
+		pinmux = <RZT2H_PORT_PINMUX(13, 5, 0x14)>, /* SCI0_TXD */
+			 <RZT2H_PORT_PINMUX(13, 4, 0x14)>; /* SCI0_RXD */
 	};
 
 #if (SEL_GPT_SD0)
@@ -582,6 +588,17 @@
 &sci0 {
 	pinctrl-0 = <&sci0_pins>;
 	pinctrl-names = "default";
+	status = "okay";
+};
+
+&sci3 {
+	pinctrl-0 = <&sci3_pins>;
+	pinctrl-names = "default";
+	linux,rs485-enabled-at-boot-time;
+	rs485-rx-during-tx;
+	rs485-enabled;
+	rts-gpios = <&pinctrl RZT2H_GPIO(14, 0) (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+
 	status = "okay";
 };
 
