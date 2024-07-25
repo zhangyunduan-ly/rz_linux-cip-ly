@@ -156,3 +156,5 @@ enum {
 
 /* FFCLR (FIFO Flag CLear Register) */
 #define FFCLR_DRC			BIT(0)				/* DR Clear */
+
+#define DCR_DEPOL			BIT(0)
