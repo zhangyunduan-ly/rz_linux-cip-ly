@@ -101,6 +101,17 @@
 	};
 #endif
 
+	vmmc_sdhi1: regulator-vcc-sdhi1 {
+		compatible = "regulator-fixed";
+
+		regulator-name = "SDHI1 Vmmc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpios = <&pinctrl RZG2L_GPIO(0, 3) GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
 	vccq_sdhi1: regulator-vccq-sdhi1 {
 		compatible = "regulator-gpio";
 
@@ -390,12 +401,6 @@
 			 <RZG2L_PORT_PINMUX(6, 3, 6)>; /* RX */
 	};
 
-	sd1_pwr_en {
-		gpio-hog;
-		gpios = <RZG2L_GPIO(0, 3) GPIO_ACTIVE_HIGH>;
-		output-high;
-		line-name = "sd1_pwr_en";
-	};
 
 #if (SW_SW0_DEV_SEL)
 	/* Support pinctrl for MMC function of SDHI0*/
@@ -550,7 +555,7 @@
 	pinctrl-names = "default", "state_uhs";
 	cd-gpios = <&pinctrl RZG2L_GPIO(0, 2) GPIO_ACTIVE_LOW>;
 
-	vmmc-supply = <&reg_3p3v>;
+	vmmc-supply = <&vmmc_sdhi1>;
 	vqmmc-supply = <&vccq_sdhi1>;
 
 	bus-width = <4>;
