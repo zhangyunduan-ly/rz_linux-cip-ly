@@ -170,6 +170,17 @@
 		regulator-always-on;
 	};
 
+	vmmc_sdhi0: regulator-vcc-sdhi0 {
+		compatible = "regulator-fixed";
+
+		regulator-name = "SDHI0 Vmmc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpios = <&pinctrl RZG2L_GPIO(10, 1) GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
 	vccq_sdhi0: regulator-vccq-sdhi0 {
 		compatible = "regulator-gpio";
 
@@ -181,6 +192,17 @@
 
 		gpios-states = <0>;
 		states = <3300000 0 1800000 1>;
+	};
+
+	vmmc_sdhi1: regulator-vcc-sdhi1 {
+		compatible = "regulator-fixed";
+
+		regulator-name = "SDHI1 Vmmc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpios = <&pinctrl RZG2L_GPIO(10, 3) GPIO_ACTIVE_HIGH>;
+		enable-active-high;
 	};
 
 	vccq_sdhi1: regulator-vccq-sdhi1 {
@@ -361,20 +383,6 @@
 			 <RZG2L_PORT_PINMUX(8, 7, 6)>; /* SCI5_RXD_MISO_SCL */
 	};
 
-	sd0_pwr_en {
-		gpio-hog;
-		gpios = <RZG2L_GPIO(10, 1) GPIO_ACTIVE_HIGH>;
-		output-high;
-		line-name = "sd0_pwr_en";
-	};
-
-	sd1_pwr_en {
-		gpio-hog;
-		gpios = <RZG2L_GPIO(10, 3) GPIO_ACTIVE_HIGH>;
-		output-high;
-		line-name = "sd1_pwr_en";
-	};
-
 	/* cam0_pwr_en is used by Google Coral Camera from CSI20 and CSI21 */
 	cam0_pwr_en {
 		gpio-hog;
@@ -529,7 +537,7 @@
 &sdhi0 {
 	pinctrl-0 = <&sdhi0_pins>;
 	pinctrl-names = "default";
-	vmmc-supply = <&reg_3p3v>;
+	vmmc-supply = <&vmmc_sdhi0>;
 	vqmmc-supply = <&vccq_sdhi0>;
 	bus-width = <4>;
 	sd-uhs-sdr50;
@@ -540,7 +548,7 @@
 &sdhi1 {
 	pinctrl-0 = <&sdhi1_pins>;
 	pinctrl-names = "default";
-	vmmc-supply = <&reg_3p3v>;
+	vmmc-supply = <&vmmc_sdhi1>;
 	vqmmc-supply = <&vccq_sdhi1>;
 	bus-width = <4>;
 	sd-uhs-sdr50;
