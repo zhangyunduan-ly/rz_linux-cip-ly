@@ -453,7 +453,7 @@ static void *renesas_rzt2h_eqos_probe(struct platform_device *pdev,
 	struct renesas_rzt2h_eqos *eqos;
 	phy_interface_t interface;
 	struct platform_device *ethss_dev_np;
-	int err, gmac_num;
+	int err, gmac_num, i;
 
 	eqos = devm_kzalloc(&pdev->dev, sizeof(*eqos), GFP_KERNEL);
 	if (!eqos) {
@@ -609,6 +609,11 @@ bypass_clk_reset_gpio:
 	data->interface = interface;
 	data->bsp_priv = eqos;
 	data->sph_disable = 1;
+
+	/* Disable TSO and enable TBS on all queues */
+	if (of_property_read_bool(node, "enable-time-based-scheduling"))
+		for (i = 0; i < data->tx_queues_to_use; i++)
+			data->tx_queues_cfg[i].tbs_en = 1;
 
 	err = renesas_rzt2h_eqos_init(pdev, eqos);
 	if (err < 0)
