@@ -20,6 +20,13 @@
 #define SEL_SD0		1
 
 /*
+ * Set marco to 1 to use OTG with CN33
+ * SEL_OTG = 1 use OTG with CN33
+ * SEL_OTG = 0 use USB host with CN80 and USB function with CN79 (default)
+ */
+#define SEL_OTG		0
+
+/*
  * Set SEL_RSPI_ETHSS to below values to select using of:
  * - 0: RSPI0
  * - 1: ETHSS (default)
@@ -451,12 +458,15 @@
 		line-name = "pcie_rstout1";
 	};
 #endif
+
+#if (SEL_OTG)
 	usb_exicen_a {
 		gpio-hog;
 		gpios = <RZT2H_GPIO(0, 2) GPIO_ACTIVE_HIGH>;
 		output-high;
 		line-name = "usb_exicen_a";
 	};
+#endif
 
 	usb_pins: usb_pins {
 		pinmux = <RZT2H_PORT_PINMUX(0, 0, 0x13)>; /* VBUS */
