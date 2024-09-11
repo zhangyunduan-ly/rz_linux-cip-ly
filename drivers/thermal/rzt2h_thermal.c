@@ -287,6 +287,7 @@ static int rzt2h_thermal_probe(struct platform_device *pdev)
 
 static const struct of_device_id rzt2h_thermal_dt_ids[] = {
 	{ .compatible = "renesas,r9a09g077-tsu", },
+	{ .compatible = "renesas,r9a09g087-tsu", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, rzt2h_thermal_dt_ids);
