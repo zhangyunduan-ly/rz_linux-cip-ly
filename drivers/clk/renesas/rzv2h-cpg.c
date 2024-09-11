@@ -308,7 +308,7 @@ static int rzv2h_cpg_plldsi_set_rate(struct clk_hw *hw,
 
 	for (pll_s = 6; pll_s >= 0; pll_s--) {
 		/* Check available range of FVCO */
-		fvco = rate * (2 << pll_s);
+		fvco = rate * (1 << pll_s);
 		if ((fvco > RZV2H_PLLFVCO_MAX) || (fvco < RZV2H_PLLFVCO_MIN))
 			continue;
 
