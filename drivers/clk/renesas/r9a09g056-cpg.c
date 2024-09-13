@@ -22,6 +22,10 @@ enum clk_ids {
 	CLK_AUDIO_EXTAL,
 	CLK_RTXIN,
 	CLK_QEXTAL,
+	CLK_ET0_TXC_TX_CLK,
+	CLK_ET0_RXC_RX_CLK,
+	CLK_ET1_TXC_TX_CLK,
+	CLK_ET1_RXC_RX_CLK,
 	AUDIO_CLKA,
 	AUDIO_CLKB,
 	AUDIO_CLKC,
@@ -39,11 +43,19 @@ enum clk_ids {
 	CLK_PLLDRP,
 
 	/* Internal Core Clocks */
+	R9A09G056_MAINCLK,
 	CLK_PLLCM33_DIV2,
+	CLK_PLLCM33_DIV3,
 	CLK_PLLCM33_DIV4,
+	CLK_PLLCM33_DIV5,
 	CLK_PLLCM33_DIV16,
 	CLK_PLLCM33_DIV32,
 	CLK_PLLCM33_DIV4_DDIV2,
+	CLK_PLLCM33_XSPI,
+	CLK_PLLCM33_XSPI_DIV2,
+	CLK_PLLCM33_ADC_ADCLK,
+	CLK_PLLCM33_ADC_PCLK,
+	CLK_PLLCM33_ADC_PCLK_DIV2,
 	CLK_PLLCLN_DIV2,
 	CLK_PLLCLN_DIV4,
 	CLK_PLLCLN_DIV8,
@@ -61,10 +73,44 @@ enum clk_ids {
 	CLK_PLLDTY_ACPU_DIV4,
 	CLK_PLLDTY_RCPU,
 	CLK_PLLDTY_RCPU_DIV4,
+	CLK_PLLVDO_CRU0,
+	CLK_PLLVDO_CRU1,
+	CLK_PLLVDO_ISU,
+	CLK_PLLETH_DIV4,
+	CLK_PLLETH_DIV4_DIV2,
+	CLK_PLLETH_LPCLK,
+	CLK_PLLETH_GBE0,
+	CLK_PLLETH_GBE1,
 	CLK_PLLGPU_GEAR,
+	CLK_SMUX2_GBE0_TXCLK,
+	CLK_SMUX2_GBE0_RXCLK,
+	CLK_SMUX2_GBE1_TXCLK,
+	CLK_SMUX2_GBE1_RXCLK,
+	CLK_SMUX2_XSPI_CLK0,
+	CLK_SMUX2_XSPI_CLK1,
 
 	/* Module Clocks */
 	MOD_CLK_BASE,
+};
+
+static const struct clk_div_table dtable_8_10[] = {
+	{0, 8},
+	{1, 10},
+	{0, 0},
+};
+
+static const struct clk_div_table dtable_2_4[] = {
+	{0, 2},
+	{1, 4},
+	{0, 0},
+};
+
+static const struct clk_div_table dtable_2_16[] = {
+	{0, 2},
+	{1, 4},
+	{2, 8},
+	{3, 16},
+	{0, 0},
 };
 
 static const struct clk_div_table dtable_2_64[] = {
@@ -76,11 +122,38 @@ static const struct clk_div_table dtable_2_64[] = {
 	{0, 0},
 };
 
+static const struct clk_div_table dtable_2_100[] = {
+	{0, 2},
+	{1, 10},
+	{2, 100},
+	{0, 0},
+};
+
+static const struct clk_div_table dtable_16_128[] = {
+	{0,  16},
+	{1,  32},
+	{2,  64},
+	{3, 128},
+	{0,   0},
+};
+
+/* Mux clock tables */
+static const char * const smux2_xspi_clk0[] = { ".pllcm33_div3", ".pllcm33_div4" };
+static const char * const smux2_xspi_clk1[] = { ".smux2_xspi_clk0", ".pllcm33_div5" };
+static const char * const smux2_gbe0_txclk[] = { ".plleth_gbe0", "et0_txc_tx_clk" };
+static const char * const smux2_gbe0_rxclk[] = { ".plleth_gbe0", "et0_rxc_rx_clk" };
+static const char * const smux2_gbe1_txclk[] = { ".plleth_gbe1", "et1_txc_tx_clk" };
+static const char * const smux2_gbe1_rxclk[] = { ".plleth_gbe1", "et1_rxc_rx_clk" };
+
 static const struct cpg_core_clk r9a09g056_core_clks[] __initconst = {
 	/* External Clock Inputs */
 	DEF_INPUT("audio_extal", CLK_AUDIO_EXTAL),
 	DEF_INPUT("rtxin", CLK_RTXIN),
 	DEF_INPUT("qextal", CLK_QEXTAL),
+	DEF_INPUT("et0_txc_tx_clk", CLK_ET0_TXC_TX_CLK),
+	DEF_INPUT("et0_rxc_rx_clk", CLK_ET0_RXC_RX_CLK),
+	DEF_INPUT("et1_txc_tx_clk", CLK_ET1_TXC_TX_CLK),
+	DEF_INPUT("et1_rxc_rx_clk", CLK_ET1_RXC_RX_CLK),
 	DEF_INPUT("audio_clka", AUDIO_CLKA),
 	DEF_INPUT("audio_clkb", AUDIO_CLKB),
 	DEF_INPUT("audio_clkc", AUDIO_CLKC),
@@ -97,11 +170,24 @@ static const struct cpg_core_clk r9a09g056_core_clks[] __initconst = {
 	DEF_PLL(".plldrp", CLK_PLLDRP, CLK_QEXTAL, PLL_CONF(0x144)),
 
 	/* Internal Core Clocks */
+	DEF_FIXED("r9a09g056_mainclk", R9A09G056_MAINCLK, CLK_QEXTAL, 1, 1),
 	DEF_FIXED(".pllcm33_div2", CLK_PLLCM33_DIV2, CLK_PLLCM33, 1, 2),
+	DEF_FIXED(".pllcm33_div3", CLK_PLLCM33_DIV3, CLK_PLLCM33, 1, 3),
 	DEF_FIXED(".pllcm33_div4", CLK_PLLCM33_DIV4, CLK_PLLCM33, 1, 4),
+	DEF_FIXED(".pllcm33_div5", CLK_PLLCM33_DIV5, CLK_PLLCM33, 1, 5),
 	DEF_FIXED(".pllcm33_div16", CLK_PLLCM33_DIV16, CLK_PLLCM33, 1, 16),
 	DEF_FIXED(".pllcm33_div32", CLK_PLLCM33_DIV32, CLK_PLLCM33, 1, 32),
 	DEF_DDIV(".pllcm33_div4_ddiv2", CLK_PLLCM33_DIV4_DDIV2, CLK_PLLCM33_DIV4, CDDIVx_DIVCTLy(0, 1, 3), dtable_2_64),
+	DEF_SDIV(".pllcm33_adc_pclk", CLK_PLLCM33_ADC_PCLK, CLK_PLLCM33_DIV2,
+							CSDIVx_DIVCTLy(1, 0, 1), dtable_8_10),
+	DEF_FIXED(".pllcm33_adc_pclk_div2", CLK_PLLCM33_ADC_PCLK_DIV2, CLK_PLLCM33_ADC_PCLK, 1, 2),
+	DEF_SDIV(".pllcm33_adc_adclk", CLK_PLLCM33_ADC_ADCLK, CLK_PLLCM33_ADC_PCLK,
+							CSDIVx_DIVCTLy(1, 1, 2), dtable_2_16),
+	DEF_MUX(".smux2_xspi_clk0", CLK_SMUX2_XSPI_CLK0, SSELx_SELCTLy(1, 2), smux2_xspi_clk0),
+	DEF_MUX(".smux2_xspi_clk1", CLK_SMUX2_XSPI_CLK1, SSELx_SELCTLy(1, 3), smux2_xspi_clk1),
+	DEF_SDIV(".pllcm33_xspi", CLK_PLLCM33_XSPI, CLK_SMUX2_XSPI_CLK1,
+							CSDIVx_DIVCTLy(0, 3, 2), dtable_2_16),
+	DEF_FIXED(".pllcm33_xspi_div2", CLK_PLLCM33_XSPI_DIV2, CLK_PLLCM33_XSPI, 1, 2),
 	DEF_FIXED(".pllcln_div2", CLK_PLLCLN_DIV2, CLK_PLLCLN, 1, 2),
 	DEF_FIXED(".pllcln_div4", CLK_PLLCLN_DIV4, CLK_PLLCLN, 1, 4),
 	DEF_FIXED(".pllcln_div8", CLK_PLLCLN_DIV8, CLK_PLLCLN, 1, 8),
@@ -114,6 +200,18 @@ static const struct cpg_core_clk r9a09g056_core_clks[] __initconst = {
 	DEF_FIXED(".plldty_div4", CLK_PLLDTY_DIV4, CLK_PLLDTY, 1, 4),
 	DEF_FIXED(".plldty_div8", CLK_PLLDTY_DIV8, CLK_PLLDTY, 1, 8),
 	DEF_FIXED(".plldty_div16", CLK_PLLDTY_DIV16, CLK_PLLDTY, 1, 16),
+	DEF_DDIV(".pllvdo_cru0", CLK_PLLVDO_CRU0, CLK_PLLVDO, CDDIVx_DIVCTLy(3, 3, 1), dtable_2_4),
+	DEF_DDIV(".pllvdo_cru1", CLK_PLLVDO_CRU1, CLK_PLLVDO, CDDIVx_DIVCTLy(4, 0, 1), dtable_2_4),
+	DEF_DDIV(".pllvdo_isu", CLK_PLLVDO_ISU, CLK_PLLVDO, CDDIVx_DIVCTLy(3, 0, 3), dtable_2_64),
+	DEF_FIXED(".plleth_div4", CLK_PLLETH_DIV4, CLK_PLLETH, 1, 4),
+	DEF_FIXED(".plleth_div4_div2", CLK_PLLETH_DIV4_DIV2, CLK_PLLETH_DIV4, 1, 2),
+	DEF_SDIV(".plleth_gbe0", CLK_PLLETH_GBE0, CLK_PLLETH_DIV4, CSDIVx_DIVCTLy(0, 0, 2), dtable_2_100),
+	DEF_SDIV(".plleth_gbe1", CLK_PLLETH_GBE1, CLK_PLLETH_DIV4, CSDIVx_DIVCTLy(0, 1, 2), dtable_2_100),
+	DEF_MUX(".smux2_gbe0_txclk", CLK_SMUX2_GBE0_TXCLK, SSELx_SELCTLy(0, 2), smux2_gbe0_txclk),
+	DEF_MUX(".smux2_gbe0_rxclk", CLK_SMUX2_GBE0_RXCLK, SSELx_SELCTLy(0, 3), smux2_gbe0_rxclk),
+	DEF_MUX(".smux2_gbe1_txclk", CLK_SMUX2_GBE1_TXCLK, SSELx_SELCTLy(1, 0), smux2_gbe1_txclk),
+	DEF_MUX(".smux2_gbe1_rxclk", CLK_SMUX2_GBE1_RXCLK, SSELx_SELCTLy(1, 1), smux2_gbe1_rxclk),
+	DEF_SDIV(".plleth_lpclk", CLK_PLLETH_LPCLK, CLK_PLLETH_DIV4, CSDIVx_DIVCTLy(0, 2, 2), dtable_16_128),
 	DEF_DDIV(".plldty_acpu", CLK_PLLDTY_ACPU, CLK_PLLDTY, CDDIVx_DIVCTLy(0, 2, 3), dtable_2_64),
 	DEF_FIXED(".plldty_acpu_div2", CLK_PLLDTY_ACPU_DIV2, CLK_PLLDTY_ACPU, 1, 2),
 	DEF_FIXED(".plldty_acpu_div4", CLK_PLLDTY_ACPU_DIV4, CLK_PLLDTY_ACPU, 1, 4),
@@ -236,6 +334,10 @@ static const struct rzv2h_mod_clk r9a09g056_mod_clks[] __initconst = {
 	DEF_MOD("canfd_pclk",			CLK_PLLCLN_DIV16, 9, 12, 4, 28),
 	DEF_MOD("canfd_clk_ram",		CLK_PLLCLN_DIV8, 9, 13, 4, 29),
 	DEF_MOD("canfd_clkc",			CLK_PLLCLN_DIV20, 9, 14, 4, 30),
+	DEF_MOD("spi_hclk",			CLK_PLLCM33_DIV4_DDIV2, 9, 15, 4, 31),
+	DEF_MOD("spi_aclk",			CLK_PLLCM33_DIV4_DDIV2, 10, 0, 5, 0),
+	DEF_MOD("spi_clk_spi",			CLK_PLLCM33_XSPI_DIV2, 10, 1, 5, 1),
+	DEF_MOD("spi_clk_spix2",		CLK_PLLCM33_XSPI, 10, 2, 5, 2),
 	DEF_MOD("sdhi_0_imclk",			CLK_PLLCLN_DIV8, 10, 3, 5, 3),
 	DEF_MOD("sdhi_0_imclk2",		CLK_PLLCLN_DIV8, 10, 4, 5, 4),
 	DEF_MOD("sdhi_0_clk_hs",		CLK_PLLCLN_DIV2, 10, 5, 5, 5),
@@ -253,8 +355,30 @@ static const struct rzv2h_mod_clk r9a09g056_mod_clks[] __initconst = {
 	DEF_MOD("usb2_u2h0_hclk",		CLK_PLLDTY_DIV8, 11, 3, 5, 19),
 	DEF_MOD("usb2_u2p_exr_cpuclk",		CLK_PLLDTY_ACPU_DIV4, 11, 5, 5, 21),
 	DEF_MOD("usb2_pclk_usbtst0",		CLK_PLLDTY_ACPU_DIV4, 11, 6, 5, 22),
+	DEF_MOD("gbeth_0_clk_tx_i",		CLK_SMUX2_GBE0_TXCLK, 11, 8, 5, 24),
+	DEF_MOD("gbeth_0_clk_rx_i",		CLK_SMUX2_GBE0_RXCLK, 11, 9, 5, 25),
+	DEF_MOD("gbeth_0_clk_tx_180_i",		CLK_SMUX2_GBE0_TXCLK, 11, 10, 5, 26),
+	DEF_MOD("gbeth_0_clk_rx_180_i",		CLK_SMUX2_GBE0_RXCLK, 11, 11, 5, 27),
+	DEF_MOD("gbeth_0_aclk_csr_i",		CLK_PLLDTY_DIV8, 11, 12, 5, 28),
+	DEF_MOD("gbeth_0_aclk_i",		CLK_PLLDTY_DIV8, 11, 13, 5, 29),
+	DEF_MOD("gbeth_1_clk_tx_i",		CLK_SMUX2_GBE1_TXCLK, 11, 14, 5, 30),
+	DEF_MOD("gbeth_1_clk_rx_i",		CLK_SMUX2_GBE1_RXCLK, 11, 15, 5, 31),
+	DEF_MOD("gbeth_1_clk_tx_180_i",		CLK_SMUX2_GBE1_TXCLK, 12, 0, 6, 0),
+	DEF_MOD("gbeth_1_clk_rx_180_i",		CLK_SMUX2_GBE1_RXCLK, 12, 1, 6, 1),
+	DEF_MOD("gbeth_1_aclk_csr_i",		CLK_PLLDTY_DIV8, 12, 2, 6, 2),
+	DEF_MOD("gbeth_1_aclk_i",		CLK_PLLDTY_DIV8, 12, 3, 6, 3),
 	DEF_MOD("pcie_aclk",			CLK_PLLDTY_ACPU_DIV2, 12, 4, 6, 4),
 	DEF_MOD("pcie_clk_pmu",			CLK_PLLDTY_ACPU_DIV2, 12, 5, 6, 5),
+	DEF_MOD("cru_0_aclk",			CLK_PLLDTY_ACPU_DIV2, 13, 2, 6, 18),
+	DEF_MOD("cru_0_vclk",			CLK_PLLVDO_CRU0, 13, 3, 6, 19),
+	DEF_MOD("cru_0_pclk",			CLK_PLLDTY_DIV16, 13, 4, 6, 20),
+	DEF_MOD("cru_1_aclk",			CLK_PLLDTY_ACPU_DIV2, 13, 5, 6, 21),
+	DEF_MOD("cru_1_vclk",			CLK_PLLVDO_CRU1, 13, 6, 6, 22),
+	DEF_MOD("cru_1_pclk",			CLK_PLLDTY_DIV16, 13, 7, 6, 23),
+	DEF_MOD("cru_0_m_xi",			R9A09G056_MAINCLK, 13, 14, 6, 30),
+	DEF_MOD("cru_1_m_xi",			R9A09G056_MAINCLK, 13, 15, 6, 30),
+	DEF_MOD("isu_aclk",			CLK_PLLVDO_ISU, 14, 6, 7, 6),
+	DEF_MOD("isu_pclk",			CLK_PLLDTY_DIV16, 14, 7, 7, 7),
 	DEF_MOD("gpu_clk",			CLK_PLLGPU_GEAR, 15, 0, 7, 16),
 	DEF_MOD("gpu_axi_clk",			CLK_PLLDTY_ACPU_DIV2, 15, 1, 7, 17),
 	DEF_MOD("gpu_ace_clk",			CLK_PLLDTY_ACPU_DIV2, 15, 2, 7, 18),
@@ -272,6 +396,8 @@ static const struct rzv2h_mod_clk r9a09g056_mod_clks[] __initconst = {
 	DEF_MOD("spdif0_clkp",			CLK_PLLDTY_DIV16, 15, 14, 7, 30),
 	DEF_MOD("spdif1_clkp",			CLK_PLLDTY_DIV16, 15, 15, 7, 31),
 	DEF_MOD("spdif2_clkp",			CLK_PLLDTY_DIV16, 16, 0, 8, 0),
+	DEF_MOD("adc_pclk",			CLK_PLLCM33_ADC_PCLK_DIV2, 16, 7, 8, 7),
+	DEF_MOD("adc_adclk",			CLK_PLLCM33_ADC_ADCLK, 16, 8, 8, 8),
 	DEF_MOD("tsu0_pclk",			CLK_QEXTAL, 16, 9, 8, 9),
 	DEF_MOD("tsu1_pclk",			CLK_QEXTAL, 16, 10, 8, 10),
 };
