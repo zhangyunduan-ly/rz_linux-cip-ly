@@ -81,6 +81,7 @@ enum clk_ids {
 	CLK_PLLETH_LPCLK,
 	CLK_PLLETH_GBE0,
 	CLK_PLLETH_GBE1,
+	CLK_PLLDSI_SDIV2,
 	CLK_PLLGPU_GEAR,
 	CLK_SMUX2_GBE0_TXCLK,
 	CLK_SMUX2_GBE0_RXCLK,
@@ -111,6 +112,26 @@ static const struct clk_div_table dtable_2_16[] = {
 	{2, 8},
 	{3, 16},
 	{0, 0},
+};
+
+static const struct clk_div_table dtable_2_32[] = {
+	{ 0,  2},
+	{ 1,  4},
+	{ 2,  6},
+	{ 3,  8},
+	{ 4, 10},
+	{ 5, 12},
+	{ 6, 14},
+	{ 7, 16},
+	{ 8, 18},
+	{ 9, 20},
+	{10, 22},
+	{11, 24},
+	{12, 26},
+	{13, 28},
+	{14, 30},
+	{15, 32},
+	{ 0,  0},
 };
 
 static const struct clk_div_table dtable_2_64[] = {
@@ -168,6 +189,7 @@ static const struct cpg_core_clk r9a09g056_core_clks[] __initconst = {
 	DEF_FIXED(".pllddr0", CLK_PLLDDR0, CLK_QEXTAL, 200, 6),
 	DEF_PLL(".pllgpu", CLK_PLLGPU, CLK_QEXTAL, PLL_CONF(0x124)),
 	DEF_PLL(".plldrp", CLK_PLLDRP, CLK_QEXTAL, PLL_CONF(0x144)),
+	DEF_PLLDSI(".plldsi", CLK_PLLDSI, CLK_QEXTAL, PLLDSI_CONF(0xc0)),
 
 	/* Internal Core Clocks */
 	DEF_FIXED("r9a09g056_mainclk", R9A09G056_MAINCLK, CLK_QEXTAL, 1, 1),
@@ -218,6 +240,7 @@ static const struct cpg_core_clk r9a09g056_core_clks[] __initconst = {
 	DEF_DDIV(".plldty_rcpu", CLK_PLLDTY_RCPU, CLK_PLLDTY, CDDIVx_DIVCTLy(3, 2, 3), dtable_2_64),
 	DEF_FIXED(".plldty_rcpu_div4", CLK_PLLDTY_RCPU_DIV4, CLK_PLLDTY_RCPU, 1, 4),
 	DEF_DDIV(".pllgpu_gear", CLK_PLLGPU_GEAR, CLK_PLLGPU, CDDIVx_DIVCTLy(3, 1, 3), dtable_2_64),
+	DEF_PLLDSI_DIV(".plldsi_sdiv2", CLK_PLLDSI_SDIV2, CLK_PLLDSI, CSDIVx_DIVCTLy(1, 2, 4), dtable_2_32),
 
 	/* Core Clocks */
 	DEF_FIXED("sys_0_pclk", R9A09G056_SYS_0_PCLK, CLK_QEXTAL, 1, 1),
@@ -379,6 +402,14 @@ static const struct rzv2h_mod_clk r9a09g056_mod_clks[] __initconst = {
 	DEF_MOD("cru_1_m_xi",			R9A09G056_MAINCLK, 13, 15, 6, 30),
 	DEF_MOD("isu_aclk",			CLK_PLLVDO_ISU, 14, 6, 7, 6),
 	DEF_MOD("isu_pclk",			CLK_PLLDTY_DIV16, 14, 7, 7, 7),
+	DEF_MOD("dsi_pclk",			CLK_PLLDTY_DIV16, 14, 8, 7, 8),
+	DEF_MOD("dsi_aclk",			CLK_PLLDTY_ACPU_DIV2, 14, 9, 7, 9),
+	DEF_MOD("dsi_vclk",			CLK_PLLDSI_SDIV2, 14, 10, 7, 10),
+	DEF_MOD("dsi_lpclk",			CLK_PLLETH_LPCLK, 14, 11, 7, 11),
+	DEF_MOD("dsi_pllclk",			R9A09G056_MAINCLK, 14, 12, 7, 12),
+	DEF_MOD("lcdc_clka",			CLK_PLLDTY_ACPU_DIV2, 14, 13, 7, 13),
+	DEF_MOD("lcdc_clkp",			CLK_PLLDTY_DIV16, 14, 14, 7, 14),
+	DEF_MOD("lcdc_clkd",			CLK_PLLDSI_SDIV2, 14, 15, 7, 15),
 	DEF_MOD("gpu_clk",			CLK_PLLGPU_GEAR, 15, 0, 7, 16),
 	DEF_MOD("gpu_axi_clk",			CLK_PLLDTY_ACPU_DIV2, 15, 1, 7, 17),
 	DEF_MOD("gpu_ace_clk",			CLK_PLLDTY_ACPU_DIV2, 15, 2, 7, 18),
