@@ -10,6 +10,7 @@
 
 #include <linux/reset.h>
 
+#include <media/v4l2-ctrls.h>
 #include <media/v4l2-async.h>
 #include <media/v4l2-dev.h>
 #include <media/v4l2-device.h>
@@ -56,6 +57,8 @@ struct rzg2l_cru_ip {
 	struct v4l2_async_notifier notifier;
 	struct v4l2_subdev *remote;
 };
+
+static const struct v4l2_ctrl_ops rzg2l_cru_ctrl_ops;
 
 /**
  * struct rzg2l_cru_dev - Renesas CRU device structure
@@ -107,6 +110,7 @@ struct rzg2l_cru_dev {
 
 	int image_conv_irq;
 
+	struct v4l2_ctrl_handler ctrl_handler;
 	struct video_device vdev;
 	struct v4l2_device v4l2_dev;
 	u8 num_buf;

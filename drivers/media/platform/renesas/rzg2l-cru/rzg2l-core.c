@@ -240,10 +240,39 @@ static int rzg2l_cru_media_init(struct rzg2l_cru_dev *cru)
 	return 0;
 }
 
+static int rzg2l_cru_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct rzg2l_cru_dev *cru = container_of(ctrl->handler,
+						 struct rzg2l_cru_dev,
+						 ctrl_handler);
+	int ret = 0;
+
+	switch (ctrl->id) {
+	case V4L2_CID_MIN_BUFFERS_FOR_CAPTURE:
+		if ((cru->state == RZG2L_CRU_DMA_STOPPED) ||
+		    (cru->state == RZG2L_CRU_DMA_STOPPING))
+			cru->num_buf = ctrl->val;
+		else
+			ret = -EBUSY;
+
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
+static const struct v4l2_ctrl_ops rzg2l_cru_ctrl_ops = {
+	.s_ctrl = rzg2l_cru_s_ctrl,
+};
+
 static int rzg2l_cru_probe(struct platform_device *pdev)
 {
 	struct rzg2l_cru_dev *cru;
 	int ret;
+	struct v4l2_ctrl *ctrl;
 
 	cru = devm_kzalloc(&pdev->dev, sizeof(*cru), GFP_KERNEL);
 	if (!cru)
@@ -288,6 +317,17 @@ static int rzg2l_cru_probe(struct platform_device *pdev)
 	ret = rzg2l_cru_media_init(cru);
 	if (ret)
 		goto error_dma_unregister;
+	/* Add the control about minimum amount of buffers */
+	v4l2_ctrl_handler_init(&cru->ctrl_handler, 1);
+	ctrl = v4l2_ctrl_new_std(&cru->ctrl_handler, &rzg2l_cru_ctrl_ops,
+			V4L2_CID_MIN_BUFFERS_FOR_CAPTURE,
+			2, RZG2L_CRU_HW_BUFFER_MAX, 1, RZG2L_CRU_HW_BUFFER_DEFAULT);
+
+	ctrl->flags &= ~V4L2_CTRL_FLAG_READ_ONLY;
+
+	v4l2_ctrl_handler_setup(&cru->ctrl_handler);
+
+	cru->v4l2_dev.ctrl_handler = &cru->ctrl_handler;
 
 	return 0;
 
