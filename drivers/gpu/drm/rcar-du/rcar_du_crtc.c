@@ -332,55 +332,46 @@ static void rcar_du_crtc_set_display_timing(struct rcar_du_crtc *rcrtc)
 		u32 tableMax;
 
 		if (rcar_du_has(rcdu, RCAR_DU_FEATURE_RZV2H)) {
-			long long div, res, mult;
+			u64 div, fout, fvco;
 			unsigned int pll_s, pll_m, pll_p, csdiv;
 			short pll_k;
 			unsigned long vclk = mode->clock;
 			unsigned int timeout = 10;
 
-find_div:
 			for (csdiv = 2; csdiv <= 32; csdiv = csdiv + 2) {
 				for (pll_p = 1; pll_p <= 4; pll_p++) {
 					for (pll_s = 0; pll_s <= 6; pll_s++) {
-						mult = vclk * csdiv *
-						       (pll_p << pll_s);
-
-						div = mult / 24000;
-						if ((div < 63) || (div > 533))
+						fout = vclk * csdiv;
+						if ((fout > 1218000) || (fout < 25000))
 							continue;
 
-						res = mult % 24000;
-						if (res >= 12000) {
-							pll_m = div + 1;
-							pll_k = (res - 24000) * 65536 / 24000;
-							if (!(((res - 24000) * 65536) % 24000))
-								goto found;
-						} else {
-							pll_m = div;
-							pll_k = res * 65536 / 24000;
-							if (!((res * 65536) % 24000))
-								goto found;
+						fvco = fout * (1 << pll_s);
+						if ((fvco > 3200000) || (fvco < 1600000))
+							continue;
+
+						div = 24000 / (pll_p * (1 << pll_s));
+						pll_m = fout / div;
+						pll_k = fout % div;
+
+						/* Check available range of K_DIV */
+						if (pll_k >= (div / 2)) {
+							pll_m++;
+							pll_k = pll_k - div;
 						}
+
+						pll_k = div_s64(((s64)pll_k << 16), div);
+
+						if ((pll_m < 64) || (pll_m > 533))
+							continue;
+
+						goto found_pll;
 					}
 				}
 			}
 
-			dev_info(rcrtc->dev->dev,
-				 "Not found pll setting for %lu (kHz)\n",
-				 vclk);
-
-			/* Round vclk to the nearest freq multiple of 25KHz */
-			if ((vclk % 25) >= 10)
-				vclk = ((vclk / 25) + 1) * 25;
-			else
-				vclk = (vclk / 25) * 25;
-			dev_info(rcrtc->dev->dev,
-				 "Recalculate with nearest vclk %lu (kHz)\n",
-				 vclk);
-
-			goto find_div;
-
-found:
+			dev_err(rcrtc->dev->dev, "Not found PLL DSI settings\n");
+			return;
+found_pll:
 			csdiv = (csdiv / 2) - 1;
 
 			dev_dbg(rcrtc->dev->dev,
