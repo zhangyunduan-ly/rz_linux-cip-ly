@@ -218,7 +218,7 @@
 	osc1: cec-clock {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
-		clock-frequency = <12000000>
+		clock-frequency = <12000000>;
 	};
 };
 
