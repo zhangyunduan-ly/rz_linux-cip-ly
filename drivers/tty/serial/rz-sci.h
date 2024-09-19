@@ -111,6 +111,7 @@ enum {
 #define FCR_TFRST			BIT(15)				/* Transmit FIFO Data Register Reset */
 #define FCR_DRES			BIT(0)				/* Incoming Data Ready Error Select */
 #define FCR_RTRG4_0			GENMASK(20, 16)
+#define FCR_TTRG			GENMASK(12, 8)
 
 /* CSR (Common Status Register) */
 #define CSR_RDRF			BIT(31)				/* Receive Data Full */

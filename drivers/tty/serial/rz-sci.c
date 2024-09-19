@@ -10,9 +10,12 @@
 #include <linux/ctype.h>
 #include <linux/cpufreq.h>
 #include <linux/delay.h>
+#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
 #include <linux/err.h>
 #include <linux/errno.h>
 #include <linux/init.h>
+#include <linux/iopoll.h>
 #include <linux/interrupt.h>
 #include <linux/ioport.h>
 #include <linux/ktime.h>
@@ -99,6 +102,26 @@ struct sci_port {
 	int				irqs[SCIx_NR_IRQS];
 	char				*irqstr[SCIx_NR_IRQS];
 
+	struct dma_chan			*chan_tx;
+	struct dma_chan			*chan_rx;
+
+#ifdef CONFIG_SERIAL_RSCI_DMA
+	struct dma_chan			*chan_tx_saved;
+	struct dma_chan			*chan_rx_saved;
+	dma_cookie_t			cookie_tx;
+	dma_cookie_t			cookie_rx[2];
+	dma_cookie_t			active_rx;
+	dma_addr_t			tx_dma_addr;
+	unsigned int			tx_dma_len;
+	struct scatterlist		sg_rx[2];
+	void				*rx_buf[2];
+	size_t				buf_len_rx;
+	struct work_struct		work_tx;
+	struct hrtimer			rx_timer;
+	unsigned int			rx_timeout;	/* microseconds */
+	bool				dma_in_progress;
+#endif
+	unsigned int			rx_frame;
 	int				rx_trigger;
 	struct timer_list		rx_fifo_timer;
 	int				rx_fifo_timeout;
@@ -276,7 +299,7 @@ static void sci_start_tx(struct uart_port *port)
 {
 	struct sci_port *sp = to_sci_port(port);
 	struct serial_rs485 *rs485conf = &port->rs485;
-	unsigned int ctrl;
+	unsigned int ctrl, new;
 
 	if (rs485conf->flags & SER_RS485_ENABLED) {
 		if (rs485conf->flags & SER_RS485_RTS_ON_SEND) {
@@ -286,12 +309,53 @@ static void sci_start_tx(struct uart_port *port)
 		}
 	}
 
-	/* TE (Transmit Enable) must be set after setting TIE (Transmit Interrupt Enable)
-	 * or in the same instruction to start the transmit process.
-	 */
+#ifdef CONFIG_SERIAL_RSCI_DMA
+	if (sp->chan_tx && !uart_circ_empty(&sp->port.state->xmit) &&
+		!dma_submit_error(sp->cookie_tx) && sp->cookie_tx > 0) {
+		/*
+		 * DMA request while s->cookie_tx > 0
+		 * Set TE (transmit enable) to 1 must be set after setting TIE
+		 * (transmit interrupt).
+		 */
+		ctrl = serial_port_in(port, CCR0);
+		serial_port_out(port, CCR0, ctrl | CCR0_TE);
+	}
+
+	if (sp->chan_tx && !uart_circ_empty(&sp->port.state->xmit) &&
+				     dma_submit_error(sp->cookie_tx)) {
+		/*
+		 * Disable TIE (transmit interrupt) and TE (transmit enable)
+		 * while transfer DMA.
+		 */
+		ctrl = serial_port_in(port, CCR0);
+		serial_port_out(port, CCR0, ctrl & ~(CCR0_TIE | CCR0_TE));
+		/* Disable transmit interrupt */
+		disable_irq_nosync(sp->irqs[SCIx_TXI_IRQ]);
+
+		sp->cookie_tx = 0;
+		schedule_work(&sp->work_tx);
+	}
+
+	/* DMA need TIE enable */
 	ctrl = serial_port_in(port, CCR0);
-	ctrl |= CCR0_TIE | CCR0_TE;
-	serial_port_out(port, CCR0, ctrl);
+	if (sp->chan_tx)
+		new = ctrl | CCR0_TIE;
+	else
+		new = ctrl & ~CCR0_TIE;
+	if (new != ctrl)
+		serial_port_out(port, CCR0, new);
+#endif
+
+	if (!sp->chan_tx) {
+		/*
+		 * TE (Transmit Enable) must be set after setting TIE
+		 * (Transmit Interrupt Enable) or in the same instruction
+		 * to start the transmit process.
+		 */
+		ctrl = serial_port_in(port, CCR0);
+		ctrl |= CCR0_TIE | CCR0_TE;
+		serial_port_out(port, CCR0, ctrl);
+	}
 }
 
 static void sci_stop_tx(struct uart_port *port)
@@ -304,7 +368,13 @@ static void sci_stop_tx(struct uart_port *port)
 	ctrl &= ~CCR0_TIE;
 
 	serial_port_out(port, CCR0, ctrl);
-
+#ifdef CONFIG_SERIAL_RSCI_DMA
+	if (to_sci_port(port)->chan_tx &&
+	!dma_submit_error(to_sci_port(port)->cookie_tx)) {
+		dmaengine_terminate_async(to_sci_port(port)->chan_tx);
+		to_sci_port(port)->cookie_tx = -EINVAL;
+	}
+#endif
 	if (rs485conf->flags & SER_RS485_ENABLED) {
 		if (rs485conf->flags & SER_RS485_RTS_ON_SEND) {
 			mctrl_gpio_set(sp->gpios, sp->port.mctrl & ~TIOCM_RTS);
@@ -409,6 +479,8 @@ static void sci_init_pins(struct uart_port *port, unsigned int cflag)
 		s->cfg->ops->init_pins(port, cflag);
 		return;
 	}
+
+	s->dma_in_progress = false;
 }
 
 static int sci_txfill(struct uart_port *port)
@@ -648,6 +720,11 @@ static int scif_set_rtrg(struct uart_port *port, int rx_trig)
 	return rx_trig;
 }
 
+static int scif_rtrg_enabled(struct uart_port *port)
+{
+	return (serial_port_in(port, FCR) & FCR_RTRG4_0) != 0;
+}
+
 static ssize_t rx_fifo_trigger_show(struct device *dev,
 				    struct device_attribute *attr, char *buf)
 {
@@ -677,10 +754,566 @@ static ssize_t rx_fifo_trigger_store(struct device *dev,
 
 static DEVICE_ATTR_RW(rx_fifo_trigger);
 
+#ifdef CONFIG_SERIAL_RSCI_DMA
+static void sci_dma_tx_complete(void *arg)
+{
+	struct sci_port *s = arg;
+	struct uart_port *port = &s->port;
+	struct circ_buf *xmit = &port->state->xmit;
+	unsigned long flags;
+	unsigned int ctrl, val;
+	const struct plat_sci_reg *reg_csr = sci_getreg(port, CSR);
+	int ret;
+
+	dev_dbg(port->dev, "%s(%d)\n", __func__, port->line);
+
+	spin_lock_irqsave(&port->lock, flags);
+
+	xmit->tail += s->tx_dma_len;
+	xmit->tail &= UART_XMIT_SIZE - 1;
+
+	port->icount.tx += s->tx_dma_len;
+
+	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+		uart_write_wakeup(port);
+
+	if (!uart_circ_empty(xmit)) {
+		ret = readl_poll_timeout_atomic(port->membase + reg_csr->offset,
+					       val, (val & CSR_TEND), 1, 50000);
+		if (ret == -ETIMEDOUT)
+			dev_err(port->dev, "Timeout waiting while Tx empty\n");
+
+		ctrl = serial_port_in(port, CCR0);
+		serial_port_out(port, CCR0, ctrl & ~CCR0_TE);
+		s->dma_in_progress = true;
+		s->cookie_tx = 0;
+		schedule_work(&s->work_tx);
+	} else {
+		s->cookie_tx = -EINVAL;
+		s->dma_in_progress = false;
+		/* Re enable SCIF interrupt after DMA transfer complete */
+		ctrl = serial_port_in(port, CCR0);
+		serial_port_out(port, CCR0, ctrl & ~(CCR0_TIE));
+		dmaengine_pause(s->chan_tx_saved);
+		enable_irq(s->irqs[SCIx_TXI_IRQ]);
+	}
+
+	spin_unlock_irqrestore(&port->lock, flags);
+}
+
+/* Locking: called with port lock held */
+static int sci_dma_rx_push(struct sci_port *s, void *buf, size_t count)
+{
+	struct uart_port *port = &s->port;
+	struct tty_port *tport = &port->state->port;
+	int copied;
+
+	copied = tty_insert_flip_string(tport, buf, count);
+	if (copied < count)
+		port->icount.buf_overrun++;
+
+	port->icount.rx += copied;
+
+	return copied;
+}
+
+static int sci_dma_rx_find_active(struct sci_port *s)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(s->cookie_rx); i++)
+		if (s->active_rx == s->cookie_rx[i])
+			return i;
+
+	return -1;
+}
+
+static void sci_dma_rx_chan_invalidate(struct sci_port *s)
+{
+	unsigned int i;
+
+	s->chan_rx = NULL;
+	for (i = 0; i < ARRAY_SIZE(s->cookie_rx); i++)
+		s->cookie_rx[i] = -EINVAL;
+	s->active_rx = 0;
+}
+
+static void sci_dma_rx_release(struct sci_port *s)
+{
+	struct dma_chan *chan = s->chan_rx_saved;
+
+	s->chan_rx_saved = NULL;
+	sci_dma_rx_chan_invalidate(s);
+	dmaengine_terminate_sync(chan);
+	dma_free_coherent(chan->device->dev, s->buf_len_rx * 2, s->rx_buf[0],
+			  sg_dma_address(&s->sg_rx[0]));
+	dma_release_channel(chan);
+}
+
+static void start_hrtimer_us(struct hrtimer *hrt, unsigned long usec)
+{
+	long sec = usec / 1000000;
+	long nsec = (usec % 1000000) * 1000;
+	ktime_t t = ktime_set(sec, nsec);
+
+	hrtimer_start(hrt, t, HRTIMER_MODE_REL);
+}
+
+static void sci_dma_rx_reenable_irq(struct sci_port *s)
+{
+	struct uart_port *port = &s->port;
+	u32 scr;
+
+	/* Direct new serial port interrupts back to CPU */
+	scr = serial_port_in(port, CCR0);
+
+	enable_irq(s->irqs[SCIx_RXI_IRQ]);
+
+	serial_port_out(port, CCR0, scr | CCR0_RIE);
+}
+
+static void sci_dma_rx_complete(void *arg)
+{
+	struct sci_port *s = arg;
+	struct dma_chan *chan = s->chan_rx;
+	struct uart_port *port = &s->port;
+	struct dma_async_tx_descriptor *desc;
+	unsigned long flags;
+	int active, count = 0;
+
+	dev_dbg(port->dev, "%s(%d) active cookie %d\n", __func__, port->line,
+		s->active_rx);
+
+	spin_lock_irqsave(&port->lock, flags);
+
+	active = sci_dma_rx_find_active(s);
+	if (active >= 0)
+		count = sci_dma_rx_push(s, s->rx_buf[active], s->buf_len_rx);
+
+	start_hrtimer_us(&s->rx_timer, s->rx_timeout);
+
+	if (count)
+		tty_flip_buffer_push(&port->state->port);
+
+	desc = dmaengine_prep_slave_sg(s->chan_rx, &s->sg_rx[active], 1,
+				       DMA_DEV_TO_MEM,
+				       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!desc)
+		goto fail;
+
+	desc->callback = sci_dma_rx_complete;
+	desc->callback_param = s;
+	s->cookie_rx[active] = dmaengine_submit(desc);
+	if (dma_submit_error(s->cookie_rx[active]))
+		goto fail;
+
+	s->active_rx = s->cookie_rx[!active];
+
+	dma_async_issue_pending(chan);
+
+	spin_unlock_irqrestore(&port->lock, flags);
+	dev_dbg(port->dev, "%s: cookie %d #%d, new active cookie %d\n",
+		__func__, s->cookie_rx[active], active, s->active_rx);
+	return;
+
+fail:
+	spin_unlock_irqrestore(&port->lock, flags);
+	dev_warn(port->dev, "Failed submitting Rx DMA descriptor\n");
+	/* Switch to PIO */
+	spin_lock_irqsave(&port->lock, flags);
+	dmaengine_terminate_async(chan);
+	sci_dma_rx_chan_invalidate(s);
+	sci_dma_rx_reenable_irq(s);
+	spin_unlock_irqrestore(&port->lock, flags);
+}
+
+static void sci_dma_tx_release(struct sci_port *s)
+{
+	struct dma_chan *chan = s->chan_tx_saved;
+
+	cancel_work_sync(&s->work_tx);
+	s->chan_tx_saved = s->chan_tx = NULL;
+	s->cookie_tx = -EINVAL;
+	dmaengine_terminate_sync(chan);
+	dma_unmap_single(chan->device->dev, s->tx_dma_addr, UART_XMIT_SIZE,
+			 DMA_TO_DEVICE);
+	dma_release_channel(chan);
+}
+
+static int sci_dma_rx_submit(struct sci_port *s, bool port_lock_held)
+{
+	struct dma_chan *chan = s->chan_rx;
+	struct uart_port *port = &s->port;
+	unsigned long flags;
+	int i;
+
+	for (i = 0; i < 2; i++) {
+		struct scatterlist *sg = &s->sg_rx[i];
+		struct dma_async_tx_descriptor *desc;
+
+		desc = dmaengine_prep_slave_sg(chan,
+			sg, 1, DMA_DEV_TO_MEM,
+			DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+		if (!desc)
+			goto fail;
+
+		desc->callback = sci_dma_rx_complete;
+		desc->callback_param = s;
+		s->cookie_rx[i] = dmaengine_submit(desc);
+		if (dma_submit_error(s->cookie_rx[i]))
+			goto fail;
+
+	}
+
+	s->active_rx = s->cookie_rx[0];
+
+	dma_async_issue_pending(chan);
+	return 0;
+fail:
+	/* Switch to PIO */
+	if (!port_lock_held)
+		spin_lock_irqsave(&port->lock, flags);
+	if (i)
+		dmaengine_terminate_async(chan);
+	sci_dma_rx_chan_invalidate(s);
+	sci_start_rx(port);
+	if (!port_lock_held)
+		spin_unlock_irqrestore(&port->lock, flags);
+	return -EAGAIN;
+}
+
+static void sci_dma_tx_work_fn(struct work_struct *work)
+{
+	struct sci_port *s = container_of(work, struct sci_port, work_tx);
+	struct dma_async_tx_descriptor *desc;
+	struct dma_chan *chan = s->chan_tx;
+	struct uart_port *port = &s->port;
+	struct circ_buf *xmit = &port->state->xmit;
+	unsigned long flags;
+	dma_addr_t buf;
+	int head, tail;
+
+	s->dma_in_progress = true;
+	/*
+	 * DMA is idle now.
+	 * Port xmit buffer is already mapped, and it is one page... Just adjust
+	 * offsets and lengths. Since it is a circular buffer, we have to
+	 * transmit till the end, and then the rest. Take the port lock to get a
+	 * consistent xmit buffer state.
+	 */
+	spin_lock_irq(&port->lock);
+	head = xmit->head;
+	tail = xmit->tail;
+	buf = s->tx_dma_addr + (tail & (UART_XMIT_SIZE - 1));
+	s->tx_dma_len = min_t(unsigned int,
+		CIRC_CNT(head, tail, UART_XMIT_SIZE),
+		CIRC_CNT_TO_END(head, tail, UART_XMIT_SIZE));
+	if (!s->tx_dma_len) {
+		/* Transmit buffer has been flushed */
+		spin_unlock_irq(&port->lock);
+		return;
+	}
+
+	desc = dmaengine_prep_slave_single(chan, buf, s->tx_dma_len,
+					   DMA_MEM_TO_DEV,
+					   DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!desc) {
+		spin_unlock_irq(&port->lock);
+		dev_warn(port->dev, "Failed preparing Tx DMA descriptor\n");
+		goto switch_to_pio;
+	}
+
+	dma_sync_single_for_device(chan->device->dev, buf, s->tx_dma_len,
+				   DMA_TO_DEVICE);
+	desc->callback = sci_dma_tx_complete;
+	desc->callback_param = s;
+	s->cookie_tx = dmaengine_submit(desc);
+
+	if (dma_submit_error(s->cookie_tx)) {
+		spin_unlock_irq(&port->lock);
+		dev_warn(port->dev, "Failed submitting Tx DMA descriptor\n");
+		goto switch_to_pio;
+	}
+
+	spin_unlock_irq(&port->lock);
+	dev_dbg(port->dev, "%s: %p: %d...%d, cookie %d\n",
+		__func__, xmit->buf, tail, head, s->cookie_tx);
+
+	dma_async_issue_pending(chan);
+	if (s->dma_in_progress)
+		sci_start_tx(port);
+	return;
+
+switch_to_pio:
+	spin_lock_irqsave(&port->lock, flags);
+	s->chan_tx = NULL;
+	sci_start_tx(port);
+	spin_unlock_irqrestore(&port->lock, flags);
+	return;
+}
+
+static enum hrtimer_restart sci_dma_rx_timer_fn(struct hrtimer *t)
+{
+	struct sci_port *s = container_of(t, struct sci_port, rx_timer);
+	struct dma_chan *chan = s->chan_rx;
+	struct uart_port *port = &s->port;
+	struct dma_tx_state state;
+	enum dma_status status;
+	unsigned long flags;
+	unsigned int read;
+	int active, count;
+
+	dev_dbg(port->dev, "DMA Rx timed out\n");
+
+	spin_lock_irqsave(&port->lock, flags);
+
+	active = sci_dma_rx_find_active(s);
+	if (active < 0) {
+		spin_unlock_irqrestore(&port->lock, flags);
+		return HRTIMER_NORESTART;
+	}
+
+	status = dmaengine_tx_status(s->chan_rx, s->active_rx, &state);
+	if (status == DMA_COMPLETE) {
+		spin_unlock_irqrestore(&port->lock, flags);
+		dev_dbg(port->dev, "Cookie %d #%d has already completed\n",
+			s->active_rx, active);
+
+		/* Let packet complete handler take care of the packet */
+		return HRTIMER_NORESTART;
+	}
+
+	dmaengine_pause(chan);
+
+	/*
+	 * sometimes DMA transfer doesn't stop even if it is stopped and
+	 * data keeps on coming until transaction is complete so check
+	 * for DMA_COMPLETE again
+	 * Let packet complete handler take care of the packet
+	 */
+	status = dmaengine_tx_status(s->chan_rx, s->active_rx, &state);
+	if (status == DMA_COMPLETE) {
+		spin_unlock_irqrestore(&port->lock, flags);
+		dev_dbg(port->dev, "Transaction complete after DMA engine was stopped");
+		return HRTIMER_NORESTART;
+	}
+
+	/* Handle incomplete DMA receive */
+	dmaengine_terminate_async(s->chan_rx);
+	read = sg_dma_len(&s->sg_rx[active]) - state.residue;
+
+	if (read) {
+		count = sci_dma_rx_push(s, s->rx_buf[active], read);
+		if (count)
+			tty_flip_buffer_push(&port->state->port);
+	}
+
+	sci_dma_rx_reenable_irq(s);
+
+	spin_unlock_irqrestore(&port->lock, flags);
+
+	return HRTIMER_NORESTART;
+}
+
+static struct dma_chan *sci_request_dma_chan(struct uart_port *port,
+					     enum dma_transfer_direction dir)
+{
+	struct dma_chan *chan;
+	struct dma_slave_config cfg;
+	int ret;
+
+	chan = dma_request_slave_channel(port->dev,
+					 dir == DMA_MEM_TO_DEV ? "tx" : "rx");
+	if (!chan) {
+		dev_dbg(port->dev, "dma_request_slave_channel failed\n");
+		return NULL;
+	}
+
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.direction = dir;
+	cfg.dst_addr = port->mapbase + (sci_getreg(port, TDR)->offset);
+	cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
+	cfg.src_addr = port->mapbase + (sci_getreg(port, RDR)->offset);
+	cfg.src_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
+
+	ret = dmaengine_slave_config(chan, &cfg);
+	if (ret) {
+		dev_warn(port->dev, "dmaengine_slave_config failed %d\n", ret);
+		dma_release_channel(chan);
+		return NULL;
+	}
+
+	return chan;
+}
+
+static void sci_request_dma(struct uart_port *port)
+{
+	struct sci_port *s = to_sci_port(port);
+	struct dma_chan *chan;
+
+	dev_dbg(port->dev, "%s: port %d\n", __func__, port->line);
+
+	/*
+	 * DMA on console may interfere with Kernel log messages which use
+	 * plain putchar(). So, simply don't use it with a console.
+	 */
+	if (uart_console(port))
+		return;
+
+	if (!port->dev->of_node)
+		return;
+
+	s->cookie_tx = -EINVAL;
+
+	/*
+	 * Don't request a dma channel if no channel was specified
+	 * in the device tree.
+	 */
+	if (!of_find_property(port->dev->of_node, "dmas", NULL))
+		return;
+
+	chan = sci_request_dma_chan(port, DMA_MEM_TO_DEV);
+	dev_dbg(port->dev, "%s: TX: got channel %p\n", __func__, chan);
+	if (chan) {
+		/* UART circular tx buffer is an aligned page. */
+		s->tx_dma_addr = dma_map_single(chan->device->dev,
+						port->state->xmit.buf,
+						UART_XMIT_SIZE,
+						DMA_TO_DEVICE);
+		if (dma_mapping_error(chan->device->dev, s->tx_dma_addr)) {
+			dev_warn(port->dev, "Failed mapping Tx DMA descriptor\n");
+			dma_release_channel(chan);
+		} else {
+			dev_dbg(port->dev, "%s: mapped %lu@%p to %pad\n",
+				__func__, UART_XMIT_SIZE,
+				port->state->xmit.buf, &s->tx_dma_addr);
+
+			INIT_WORK(&s->work_tx, sci_dma_tx_work_fn);
+			s->chan_tx_saved = s->chan_tx = chan;
+		}
+	}
+
+	chan = sci_request_dma_chan(port, DMA_DEV_TO_MEM);
+	dev_dbg(port->dev, "%s: RX: got channel %p\n", __func__, chan);
+	if (chan) {
+		unsigned int i;
+		dma_addr_t dma;
+		void *buf;
+
+		s->buf_len_rx = 2 * max_t(size_t, 16, port->fifosize);
+		buf = dma_alloc_coherent(chan->device->dev, s->buf_len_rx * 2,
+					 &dma, GFP_KERNEL);
+		if (!buf) {
+			dev_warn(port->dev,
+				 "Failed to allocate Rx dma buffer, using PIO\n");
+			dma_release_channel(chan);
+			return;
+		}
+
+		for (i = 0; i < 2; i++) {
+			struct scatterlist *sg = &s->sg_rx[i];
+
+			sg_init_table(sg, 1);
+			s->rx_buf[i] = buf;
+			sg_dma_address(sg) = dma;
+			sg_dma_len(sg) = s->buf_len_rx;
+
+			buf += s->buf_len_rx;
+			dma += s->buf_len_rx;
+		}
+
+		hrtimer_init(&s->rx_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		s->rx_timer.function = sci_dma_rx_timer_fn;
+
+		s->chan_rx_saved = s->chan_rx = chan;
+	}
+}
+
+static void sci_free_dma(struct uart_port *port)
+{
+	struct sci_port *s = to_sci_port(port);
+
+	if (s->chan_tx_saved)
+		sci_dma_tx_release(s);
+	if (s->chan_rx_saved)
+		sci_dma_rx_release(s);
+}
+
+static void sci_flush_buffer(struct uart_port *port)
+{
+	struct sci_port *s = to_sci_port(port);
+
+	/*
+	 * In uart_flush_buffer(), the xmit circular buffer has just been
+	 * cleared, so we have to reset tx_dma_len accordingly, and stop any
+	 * pending transfers
+	 */
+	s->tx_dma_len = 0;
+	if (s->chan_tx) {
+		dmaengine_terminate_async(s->chan_tx);
+		s->cookie_tx = -EINVAL;
+	}
+}
+#else /* !CONFIG_SERIAL_RSCI_DMA */
+static inline void sci_request_dma(struct uart_port *port)
+{
+}
+
+static inline void sci_free_dma(struct uart_port *port)
+{
+}
+
+#define sci_flush_buffer	NULL
+#endif /* !CONFIG_SERIAL_RSCI_DMA */
+
 static irqreturn_t sci_rx_interrupt(int irq, void *ptr)
 {
 	struct uart_port *port = ptr;
+	struct sci_port *s = to_sci_port(port);
+	struct serial_rs485 *rs485conf = &port->rs485;
 
+	#ifdef CONFIG_SERIAL_RSCI_DMA
+	if (s->chan_rx) {
+		u32 scr = serial_port_in(port, CCR0);
+
+		/* Disable future Rx interrupts */
+
+		if (sci_dma_rx_submit(s, false) < 0)
+			goto handle_pio;
+
+		disable_irq_nosync(s->irqs[SCIx_RXI_IRQ]);
+
+		/* DMA need RIE enable */
+		scr |= CCR0_RIE;
+
+		serial_port_out(port, CCR0, scr);
+		/* Clear current interrupt */
+		sci_clear_DRxC(port);
+		dev_dbg(port->dev, "Rx IRQ %lu: setup t-out in %u us\n",
+			jiffies, s->rx_timeout);
+		start_hrtimer_us(&s->rx_timer, s->rx_timeout);
+
+		if (rs485conf->flags & SER_RS485_ENABLED)
+			port->hw_stopped = 1;
+
+		return IRQ_HANDLED;
+	}
+
+handle_pio:
+#endif
+
+	if (s->rx_trigger > 1 && s->rx_fifo_timeout > 0) {
+		if (!scif_rtrg_enabled(port))
+			scif_set_rtrg(port, s->rx_trigger);
+
+		mod_timer(&s->rx_fifo_timer, jiffies + DIV_ROUND_UP(
+			  s->rx_frame * HZ * s->rx_fifo_timeout, 1000000));
+	}
+
+	/* I think sci_receive_chars has to be called irrespective
+	 * of whether the I_IXOFF is set, otherwise, how is the interrupt
+	 * to be disabled?
+	 */
 	sci_receive_chars(port);
 
 	return IRQ_HANDLED;
@@ -716,6 +1349,7 @@ static irqreturn_t sci_tx_end_interrupt(int irq, void *ptr)
 static irqreturn_t sci_er_interrupt(int irq, void *ptr)
 {
 	struct uart_port *port = ptr;
+	struct sci_port *s = to_sci_port(port);
 
 	/* Handle errors */
 	if (port->type == PORT_SCI) {
@@ -726,13 +1360,15 @@ static irqreturn_t sci_er_interrupt(int irq, void *ptr)
 		}
 	} else {
 		sci_handle_fifo_overrun(port);
-		sci_receive_chars(port);
+		if (!s->chan_rx)
+			sci_receive_chars(port);
 	}
 
 	sci_clear_CFC(port, SCxSR_ERROR_CLEAR(port));
 
 	/* Kick the transmission */
-	sci_tx_interrupt(irq, ptr);
+	if (!s->chan_tx)
+		sci_tx_interrupt(irq, ptr);
 
 	return IRQ_HANDLED;
 }
@@ -916,9 +1552,13 @@ static int sci_startup(struct uart_port *port)
 
 	dev_dbg(port->dev, "%s(%d)\n", __func__, port->line);
 
+	sci_request_dma(port);
+
 	ret = sci_request_irq(s);
-	if (unlikely(ret < 0))
+	if (unlikely(ret < 0)) {
+		sci_free_dma(port);
 		return ret;
+	}
 
 	return 0;
 }
@@ -941,9 +1581,17 @@ static void sci_shutdown(struct uart_port *port)
 	serial_port_out(port, CCR0, 0);
 	spin_unlock_irqrestore(&port->lock, flags);
 
+#ifdef CONFIG_SERIAL_RSCI_DMA
+	if (s->chan_rx_saved) {
+		dev_dbg(port->dev, "%s(%d) deleting rx_timer\n", __func__,
+			port->line);
+		hrtimer_cancel(&s->rx_timer);
+	}
+#endif
 	if (s->rx_trigger > 1 && s->rx_fifo_timeout > 0)
 		del_timer_sync(&s->rx_fifo_timer);
 	sci_free_irq(s);
+	sci_free_dma(port);
 }
 
 /* calculate sample rate, BRR, and clock select */
@@ -1126,6 +1774,15 @@ done:
 
 		if (s->rx_trigger > 1)
 			scif_set_rtrg(port, s->rx_trigger);
+
+#ifdef CONFIG_SERIAL_RSCI_DMA
+		if (s->chan_tx || s->chan_rx) {
+			ctrl = serial_port_in(port, FCR);
+			ctrl &= ~FCR_RTRG4_0;
+			ctrl |= FCR_TTRG;
+			serial_port_out(port, FCR, ctrl);
+		}
+#endif
 	}
 
 	sci_init_pins(port, termios->c_cflag);
@@ -1139,6 +1796,24 @@ done:
 
 	ccr0_val |= CCR0_RE;
 	serial_port_out(port, CCR0, ccr0_val);
+
+	/*
+	 * Calculate delay for 2 DMA buffers (4 FIFO).
+	 * See serial_core.c::uart_update_timeout().
+	 * With 10 bits (CS8), 250Hz, 115200 baud and 64 bytes FIFO, the above
+	 * function calculates 1 jiffie for the data plus 5 jiffies for the
+	 * "slop(e)." Then below we calculate 5 jiffies (20ms) for 2 DMA
+	 * buffers (4 FIFO sizes), but when performing a faster transfer, the
+	 * value obtained by this formula is too small. Therefore, if the value
+	 * is smaller than 20ms, use 20ms as the timeout value for DMA.
+	 */
+	s->rx_frame = (10000 * bits) / (baud / 100);
+
+#ifdef CONFIG_SERIAL_RSCI_DMA
+	s->rx_timeout = s->buf_len_rx * 2 * s->rx_frame;
+	if (s->rx_timeout < 20)
+		s->rx_timeout = 20;
+#endif
 
 	if (rs485conf->flags & SER_RS485_ENABLED) {
 		ccr3_val |= CCR3_DEN;
@@ -1294,6 +1969,7 @@ static const struct uart_ops sci_uart_ops = {
 	.enable_ms	= sci_enable_ms,
 	.startup	= sci_startup,
 	.shutdown	= sci_shutdown,
+	.flush_buffer	= sci_flush_buffer,
 	.set_termios	= sci_set_termios,
 	.pm		= sci_pm,
 	.type		= sci_type,
