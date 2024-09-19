@@ -96,3 +96,4 @@ dtb-$(CONFIG_ARCH_R9A07G054) += r9a07g054l2-smarc.dtb
 dtb-$(CONFIG_ARCH_R9A07G054) += r9a07g054l2-dev.dtb
 
 dtb-$(CONFIG_ARCH_R9A09G077) += r9a09g077m44-dev.dtb
+dtb-$(CONFIG_ARCH_R9A09G087) += r9a09g087m44-dev.dtb
