@@ -729,6 +729,11 @@ config SERIAL_RZ_SCI_EARLYCON
 	select SERIAL_EARLYCON
 	default ARCH_RENESAS
 
+config SERIAL_RSCI_DMA
+	bool "DMA support" if EXPERT
+	depends on SERIAL_RZ_SCI && DMA_ENGINE
+	default ARCH_RENESAS
+
 config SERIAL_PNX8XXX
 	bool "Enable PNX8XXX SoCs' UART Support"
 	depends on SOC_PNX833X
