@@ -22,6 +22,7 @@
 #include <linux/reset.h>
 #include <linux/spinlock.h>
 #include <linux/syscore_ops.h>
+#include <linux/irqchip/icu-v2h.h>
 
 /* DT "interrupts" indexes */
 #define ICU_IRQ_START				1
@@ -41,6 +42,13 @@
 #define ICU_TSCLR				0x24
 #define ICU_TITSR(k)				(0x28 + (k) * 4)
 #define ICU_TSSR(k)				(0x30 + (k) * 4)
+
+/* DMACx Factor Selection Register y */
+#define DMxSELy(x, y)				(0x0420 + (x) * 0x0020 + (y) * 0x0004)
+/* DMAC ACK Selection Register x */
+#define DMACKSEL(x)				(0x0500 + (x) * 0x0004)
+/* DMAC TEND Selection Register x */
+#define DMTENDSEL(x)				(0x055C + (x) * 0x0004)
 
 /* NMI */
 #define ICU_NMI_EDGE_FALLING			0
@@ -360,6 +368,63 @@ static const struct irq_chip rzv2h_icu_chip = {
 	.flags			= IRQCHIP_SET_TYPE_MASKED,
 };
 
+int register_dmac_req_signal(struct platform_device *icu_dev, unsigned int dmac,
+				unsigned int channel, int dmac_req)
+{
+	struct rzv2h_icu_priv *priv = platform_get_drvdata(icu_dev);
+	u32 y, low_up, dmsel;
+	u32 mask = 0x0000FFFF;
+
+	if ((dmac_req < 0) || (dmac_req > 0x1B4))
+		dev_dbg(&icu_dev->dev, "%s: Disable dmac req signal\n", __func__);
+
+	if ((channel < 0) || (channel > 15)) {
+		dev_dbg(&icu_dev->dev, "%s: Invalid channel\n", __func__);
+		return -EINVAL;
+	}
+
+	y = channel / 2;
+	low_up = channel % 2;
+
+	dmsel = readl_relaxed(priv->base + DMxSELy(dmac, y));
+
+	if (low_up) {
+		dmac_req <<= 16;
+		mask <<= 16;
+	}
+
+	dmsel = (dmsel & (~mask)) | dmac_req;
+
+	writel_relaxed(dmsel, priv->base + DMxSELy(dmac, y));
+
+	return 0;
+}
+EXPORT_SYMBOL(register_dmac_req_signal);
+
+int register_dmac_ack_signal(struct platform_device *icu_dev, int dmac_ack, int dmac_ack_channel)
+{
+	struct rzv2h_icu_priv *priv = platform_get_drvdata(icu_dev);
+	u32 reg_position, dmacksel, mask;
+
+	if ((dmac_ack_channel < 0) || (dmac_ack_channel > 0x4F))
+		dev_dbg(&icu_dev->dev, "%s: Disable dmac ack signal\n", __func__);
+
+	if ((dmac_ack < 0) || (dmac_ack > 88))
+		dev_dbg(&icu_dev->dev, "%s: Not use dmac ack\n", __func__);
+
+	reg_position = dmac_ack / 4;
+	dmacksel = readl_relaxed(priv->base + DMACKSEL(reg_position));
+
+	mask = 0x7F << (8 * (dmac_ack % 4));
+	dmac_ack_channel <<= (8 * (dmac_ack % 4));
+	dmacksel = (dmacksel  & (~mask)) | dmac_ack_channel;
+
+	writel_relaxed(dmacksel, priv->base + DMACKSEL(reg_position));
+
+	return 0;
+}
+EXPORT_SYMBOL(register_dmac_ack_signal);
+
 static int rzv2h_icu_alloc(struct irq_domain *domain, unsigned int virq, unsigned int nr_irqs,
 			   void *arg)
 {
@@ -447,6 +512,7 @@ static int rzv2h_icu_init(struct device_node *node, struct device_node *parent)
 	}
 
 	rzv2h_icu_data->irqchip = &rzv2h_icu_chip;
+	platform_set_drvdata(pdev, rzv2h_icu_data);
 
 	rzv2h_icu_data->base = devm_of_iomap(&pdev->dev, pdev->dev.of_node, 0, NULL);
 	if (IS_ERR(rzv2h_icu_data->base)) {
