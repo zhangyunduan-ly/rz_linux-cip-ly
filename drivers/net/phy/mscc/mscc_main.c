@@ -171,7 +171,8 @@ static void vsc85xx_get_stats(struct phy_device *phydev,
 
 static int vsc85xx_led_cntl_set(struct phy_device *phydev,
 				u8 led_num,
-				u8 mode)
+				u8 mode,
+				bool combine_disable)
 {
 	int rc;
 	u16 reg_val;
@@ -181,6 +182,10 @@ static int vsc85xx_led_cntl_set(struct phy_device *phydev,
 	reg_val &= ~LED_MODE_SEL_MASK(led_num);
 	reg_val |= LED_MODE_SEL(led_num, (u16)mode);
 	rc = phy_write(phydev, MSCC_PHY_LED_MODE_SEL, reg_val);
+	reg_val = phy_read(phydev, MSCC_PHY_LED_BEHAVIOR);
+	reg_val &= ~LED_COMBINE_DIS_MASK(led_num);
+	reg_val |= LED_COMBINE_DIS(led_num, combine_disable);
+	rc = phy_write(phydev, MSCC_PHY_LED_BEHAVIOR, reg_val);
 	mutex_unlock(&phydev->lock);
 
 	return rc;
@@ -432,6 +437,18 @@ static int vsc85xx_dt_led_mode_get(struct phy_device *phydev,
 	return led_mode;
 }
 
+static bool vsc85xx_dt_led_combine_get(struct phy_device *phydev,
+				       char *led)
+{
+	struct device *dev = &phydev->mdio.dev;
+	struct device_node *of_node = dev->of_node;
+
+	if (!of_node)
+		return false;
+
+	return of_property_read_bool(of_node, led);
+}
+
 #else
 static int vsc85xx_edge_rate_magic_get(struct phy_device *phydev)
 {
@@ -444,13 +461,19 @@ static int vsc85xx_dt_led_mode_get(struct phy_device *phydev,
 {
 	return default_mode;
 }
+
+static bool vsc85xx_dt_led_combine_get(struct phy_device *phydev,
+				       char *led)
+{
+	return false;
+}
 #endif /* CONFIG_OF_MDIO */
 
 static int vsc85xx_dt_led_modes_get(struct phy_device *phydev,
 				    u32 *default_mode)
 {
 	struct vsc8531_private *priv = phydev->priv;
-	char led_dt_prop[28];
+	char led_dt_prop[32];
 	int i, ret;
 
 	for (i = 0; i < priv->nleds; i++) {
@@ -463,6 +486,14 @@ static int vsc85xx_dt_led_modes_get(struct phy_device *phydev,
 		if (ret < 0)
 			return ret;
 		priv->leds_mode[i] = ret;
+
+		ret = sprintf(led_dt_prop,
+			      "vsc8531,led-%d-combine-disable", i);
+		if (ret < 0)
+			return ret;
+
+		priv->leds_combine[i] =
+			vsc85xx_dt_led_combine_get(phydev, led_dt_prop);
 	}
 
 	return 0;
@@ -1677,7 +1708,8 @@ static int vsc8584_config_init(struct phy_device *phydev)
 		return ret;
 
 	for (i = 0; i < vsc8531->nleds; i++) {
-		ret = vsc85xx_led_cntl_set(phydev, i, vsc8531->leds_mode[i]);
+		ret = vsc85xx_led_cntl_set(phydev, i, vsc8531->leds_mode[i],
+					   vsc8531->leds_combine[i]);
 		if (ret)
 			return ret;
 	}
@@ -1744,7 +1776,8 @@ static int vsc85xx_config_init(struct phy_device *phydev)
 		return rc;
 
 	for (i = 0; i < vsc8531->nleds; i++) {
-		rc = vsc85xx_led_cntl_set(phydev, i, vsc8531->leds_mode[i]);
+		rc = vsc85xx_led_cntl_set(phydev, i, vsc8531->leds_mode[i],
+					  vsc8531->leds_combine[i]);
 		if (rc)
 			return rc;
 	}
@@ -2030,7 +2063,8 @@ static int vsc8514_config_init(struct phy_device *phydev)
 		return ret;
 
 	for (i = 0; i < vsc8531->nleds; i++) {
-		ret = vsc85xx_led_cntl_set(phydev, i, vsc8531->leds_mode[i]);
+		ret = vsc85xx_led_cntl_set(phydev, i, vsc8531->leds_mode[i],
+					   vsc8531->leds_combine[i]);
 		if (ret)
 			return ret;
 	}
