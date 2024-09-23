@@ -38,6 +38,10 @@ properties:
 
       - items:
           - enum:
+              - renesas,r9a09g056-pinctrl     # RZ/V2N
+
+      - items:
+          - enum:
               - renesas,r9a09g057-pinctrl     # RZ/V2H
 
   reg:
