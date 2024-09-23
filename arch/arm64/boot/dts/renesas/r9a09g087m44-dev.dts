@@ -795,7 +795,9 @@
 		phy3: ethernet-phy@3 {
 			compatible = "ethernet-phy-id0007.0772";
 			phy-mode = "rgmii-id";
-			vsc8531,led-1-mode = <VSC8531_FORCE_LED_ON>;
+			vsc8531,led-0-mode = <VSC8531_LINK_ACTIVITY>;
+			vsc8531,led-1-mode = <VSC8531_LINK_ACTIVITY>;
+			vsc8531,led-1-combine-disable;
 			reg = <3>;
 		};
 	};
@@ -816,7 +818,9 @@
 		phy2: ethernet-phy@2 {
 			compatible = "ethernet-phy-id0007.0772";
 			phy-mode = "rgmii-id";
-			vsc8531,led-1-mode = <VSC8531_FORCE_LED_ON>;
+			vsc8531,led-0-mode = <VSC8531_LINK_ACTIVITY>;
+			vsc8531,led-1-mode = <VSC8531_LINK_ACTIVITY>;
+			vsc8531,led-1-combine-disable;
 			reg = <2>;
 		};
 	};
@@ -852,7 +856,9 @@
 			compatible = "ethernet-phy-id0007.0772";
 			phy-mode = "mii";
 			max-speed = <100>;
-			vsc8531,led-1-mode = <VSC8531_FORCE_LED_OFF>;
+			vsc8531,led-0-mode = <VSC8531_LINK_ACTIVITY>;
+			vsc8531,led-1-mode = <VSC8531_LINK_ACTIVITY>;
+			vsc8531,led-1-combine-disable;
 			reg = <0>;
 		};
 
@@ -860,7 +866,9 @@
 			compatible = "ethernet-phy-id0007.0772";
 			phy-mode = "mii";
 			max-speed = <100>;
-			vsc8531,led-1-mode = <VSC8531_FORCE_LED_OFF>;
+			vsc8531,led-0-mode = <VSC8531_LINK_ACTIVITY>;
+			vsc8531,led-1-mode = <VSC8531_LINK_ACTIVITY>;
+			vsc8531,led-1-combine-disable;
 			reg = <1>;
 		};
 	};
@@ -887,11 +895,13 @@
 
 &mii_conv0 {
 	renesas,ethss-port = <ETHSS_SWITCH_PORT0>;
+	renesas,ethsw-phylink = <0>;
 	status = "okay";
 };
 
 &mii_conv1 {
 	renesas,ethss-port = <ETHSS_SWITCH_PORT1>;
+	renesas,ethsw-phylink = <0>;
 	status = "okay";
 };
 
