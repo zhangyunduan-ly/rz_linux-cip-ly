@@ -58,6 +58,13 @@
  */
 #define SEL_SDHI_CANFD		0
 
+/*
+ * Set SEL_SCI1_LCDC to below values to select using of:
+ * - 0: SCI1
+ * - 1: LCDC (default)
+ */
+#define SEL_SCI1_LCDC		1
+
 / {
 	model = "Renesas Development EVK based on r9a09g087m44";
 	compatible = "renesas,r9a09g087m44-dev", "renesas,r9a09g087m44", "renesas,r9a09g087";
@@ -65,6 +72,7 @@
 
 	aliases {
 		serial0 = &sci0;
+		serial1 = &sci1;
 		mmc0 = &sdhi0;
 		mmc1 = &sdhi1;
 		i2c1 = &i2c1;
@@ -147,7 +155,7 @@
 		states = <3300000 0 1800000 1>;
 	};
 
-#if SEL_ETHSW_LCDC
+#if (SEL_ETHSW_LCDC && SEL_SCI1_LCDC)
 	hdmi-out {
 		compatible = "hdmi-connector";
 		type = "d";
@@ -385,7 +393,7 @@
 		};
 	};
 
-#if (SEL_ETHSW_LCDC)
+#if (SEL_ETHSW_LCDC && SEL_SCI1_LCDC)
 	du_pins: du {
 		du_data {
 			pinmux = <RZT2H_PORT_PINMUX(10, 0, 0x28)>, /* LCDC_DATR0 */
@@ -430,6 +438,14 @@
 			pinmux = <RZT2H_PORT_PINMUX(9, 7, 0x28)>; /* LCDC_DE */
 			drive-strength = <3>;
 		};
+	};
+#endif
+
+#if (!SEL_SCI1_LCDC)
+	sci1_pins: sci1 {
+		pinmux = <RZT2H_PORT_PINMUX(18, 4, 0x14)>, /* SCI1_TXD */
+			 <RZT2H_PORT_PINMUX(18, 3, 0x14)>; /* SCI1_RXD */
+		bias-pull-up;
 	};
 #endif
 
@@ -534,7 +550,7 @@
 
 	status = "okay";
 
-#if (SEL_ETHSW_LCDC)
+#if (SEL_ETHSW_LCDC && SEL_SCI1_LCDC)
 	adv7513: adv7513@39 {
 		compatible = "adi,adv7513";
 		reg = <0x39>;
@@ -814,7 +830,7 @@
 };
 #endif
 
-#if (SEL_ETHSW_LCDC)
+#if (SEL_ETHSW_LCDC && SEL_SCI1_LCDC)
 &du {
 	pinctrl-0 = <&du_pins>;
 	pinctrl-names = "default";
@@ -828,6 +844,14 @@
 			};
 		};
 	};
+};
+#endif
+
+#if (!SEL_SCI1_LCDC)
+&sci1 {
+	pinctrl-0 = <&sci1_pins>;
+	pinctrl-names = "default";
+	status = "okay";
 };
 #endif
 
