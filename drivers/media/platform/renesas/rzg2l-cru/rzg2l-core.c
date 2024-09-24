@@ -457,6 +457,10 @@ static const struct of_device_id rzg2l_cru_of_id_table[] = {
 		.compatible = "renesas,rzv2h-cru",
 		.data = &rzv2h_cru_info,
 	},
+	{
+		.compatible = "renesas,rzv2n-cru",
+		.data = &rzv2h_cru_info,
+	},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, rzg2l_cru_of_id_table);
