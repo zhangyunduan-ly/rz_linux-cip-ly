@@ -786,6 +786,24 @@
 			power-domains = <&cpg>;
 			status = "disabled";
 		};
+
+		xspi: spi@11030000 {
+			compatible = "renesas,v2h-xspi-if";
+			reg = <0 0x11030000 0 0x10000>,
+			      <0 0x20000000 0 0x1000000>;
+			reg-names = "regs", "dirmap";
+			clocks = <&cpg CPG_MOD 0xa1>,
+				 <&cpg CPG_MOD 0x9f>,
+				 <&cpg CPG_MOD 0xa0>,
+				 <&cpg CPG_MOD 0xa2>;
+			clock-names = "spi", "hclk", "aclk", "spix2";
+			resets = <&cpg 0xa3>,
+				 <&cpg 0xa4>;
+			power-domains = <&cpg>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
 	};
 
 	timer {
