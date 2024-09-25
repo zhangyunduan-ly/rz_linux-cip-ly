@@ -103,21 +103,6 @@
 		#sound-dai-cells = <0>;
 	};
 
-#if COMMON_PINS_SEL == SPDIF_PINS_SEL
-		spdif_link: simple-audio-card,dai-link@1 {
-			bitclock-master = <&cpu_dai1>;
-			frame-master = <&cpu_dai1>;
-
-			cpu_dai1: cpu {
-				sound-dai = <&spdif>;
-			};
-
-			codec {
-				sound-dai = <&codec_test0>;
-			};
-		};
-#endif
-
 	snd_rzg2l: sound {
 		compatible = "simple-audio-card";
 		simple-audio-card,name = "snd_rzg3s";
@@ -137,6 +122,21 @@
 				clocks = <&versa3 4>;
 			};
 		};
+
+#if COMMON_PINS_SEL == SPDIF_PINS_SEL
+		spdif_link: simple-audio-card,dai-link@1 {
+			bitclock-master = <&cpu_dai1>;
+			frame-master = <&cpu_dai1>;
+
+			cpu_dai1: cpu {
+				sound-dai = <&spdif>;
+			};
+
+			codec {
+				sound-dai = <&codec_test0>;
+			};
+		};
+#endif
 	};
 };
 
