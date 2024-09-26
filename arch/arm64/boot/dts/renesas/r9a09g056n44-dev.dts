@@ -191,3 +191,7 @@
 &ostm1 {
 	status = "okay";
 };
+
+&wdt1 {
+	status = "okay";
+};
