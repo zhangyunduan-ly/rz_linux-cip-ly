@@ -216,6 +216,22 @@ static int rzg2l_cru_media_init(struct rzg2l_cru_dev *cru)
 	if (ret)
 		return ret;
 
+	ret = of_property_read_u32(cru->dev->of_node, "channel,id", &cru->id);
+	if (ret) {
+		if (cru->info->cru_type == RZV2H_CRU_TYPE) {
+			dev_err(cru->dev, "%pOF: No channel,id property found\n",
+				cru->dev->of_node);
+			return -EINVAL;
+	}
+		cru->id = 0;
+	}
+
+	if (cru->id >= RZG2L_CRU_MAX) {
+		dev_err(cru->dev, "%pOF: Invalid channel,id '%u'\n",
+			cru->dev->of_node, cru->id);
+		return -EINVAL;
+	}
+
 	mutex_init(&cru->mdev_lock);
 	mdev = &cru->mdev;
 	mdev->dev = cru->dev;

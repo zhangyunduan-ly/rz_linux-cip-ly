@@ -194,6 +194,8 @@ struct rzg2l_cru_dev {
 	enum rzg2l_cru_dma_state state;
 
 	struct v4l2_pix_format format;
+
+	int id;
 };
 
 int rzg2l_cru_start_image_processing(struct rzg2l_cru_dev *cru);
