@@ -789,6 +789,20 @@ static irqreturn_t rzv2h_cru_irq(int irq, void *data)
 		cru->state = RZG2L_CRU_DMA_RUNNING;
 	}
 
+	if (slot != prev_slot[cru->id]) {
+		/* Update value of previous memory bank slot */
+		prev_slot[cru->id] = slot;
+	} else {
+		/*
+		 * AXI-Bus congestion maybe occurred.
+		 * Set auto recovery mode to clear all FIFOs
+		 * and resume transmission.
+		 */
+		rzg2l_cru_write(cru, AMnFIFO, 0);
+
+		dev_dbg(cru->dev, "Dropping frame %u with CRU channel\n", cru->sequence);
+	}
+
 	/* Capture frame */
 	if (cru->queue_buf[slot]) {
 		cru->queue_buf[slot]->field = cru->format.field;

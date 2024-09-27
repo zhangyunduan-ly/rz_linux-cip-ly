@@ -448,6 +448,7 @@ static const u16 rzv2h_cru_regs[CRU_REGS_END] = {
 	[ICnTICTRL2] = 0x360,
 	[ICnTISIZE1] = 0x364,
 	[ICnTISIZE2] = 0x368,
+	[AMnFIFO] = 0x0F0,
 };
 
 static const struct rzg2l_cru_info rzg2l_cru_info = {
