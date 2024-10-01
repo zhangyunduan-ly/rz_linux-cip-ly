@@ -218,6 +218,18 @@
 			status = "disabled";
 		};
 
+		xhci0: usb@15850000 {
+			compatible = "renesas,rzv2n-xhci";
+			reg = <0 0x15850000 0 0x10000>;
+			interrupts = <GIC_SPI 759 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&cpg CPG_MOD 0xaf>,
+				 <&cpg CPG_MOD 0xb0>;
+			clock-names = "reg", "usbtst";
+			power-domains = <&cpg>;
+			resets = <&cpg 0xaa>;
+			status = "disabled";
+		};
+
 		scif: serial@11c01400 {
 			compatible = "renesas,scif-r9a09g056", "renesas,scif-r9a07g044";
 			reg = <0 0x11c01400 0 0x400>;
