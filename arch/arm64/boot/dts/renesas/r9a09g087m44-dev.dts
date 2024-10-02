@@ -81,6 +81,13 @@
 #define SEL_I2C0_LCDC		1
 
 /*
+ * Set SEL_PCIE to below values to select using of:
+ * - 0: ETH3 (default)
+ * - 1: PCIE
+ */
+#define SEL_PCIE		0
+
+/*
  * MTU3 macros are created to support setting pinctrl and properties in order
  * to use MTU3 functions.
  * MTU3_PWM_SUPPORT: Enable to support PWM of MTU3. By default, PWM mode 1 of
@@ -407,7 +414,7 @@
 			drive-strength	= <3>;
 	};
 
-#if (!SPI2_SEL && !SEL_ADC)
+#if (!SPI2_SEL && !SEL_ADC && !SEL_PCIE)
 	eth3_pins: ethss_3 {
 		pinmux = <RZT2H_PORT_PINMUX(33, 2, 0x0F)>,	/* ETH3_TXCLK */
 			 <RZT2H_PORT_PINMUX(33, 3, 0x0F)>,	/* ETH3_TXD[0] */
@@ -428,6 +435,22 @@
 			input-schmitt-disable;
 			slew-rate	= <1>;
 			drive-strength	= <3>;
+	};
+#endif
+
+#if (SEL_PCIE)
+	pcie_rstout0 {
+		gpio-hog;
+		gpios = <RZT2H_GPIO(33, 3) GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "pcie_rstout0";
+	};
+
+	pcie_rstout1 {
+		gpio-hog;
+		gpios = <RZT2H_GPIO(33, 4) GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "pcie_rstout1";
 	};
 #endif
 
@@ -799,7 +822,7 @@
 	};
 };
 
-#if (!SPI2_SEL && !SEL_ADC)
+#if (!SPI2_SEL && !SEL_ADC && !SEL_PCIE)
 &ethss {
 	status = "okay";
 	pinctrl-names = "default";
@@ -881,6 +904,12 @@
 	renesas,ethss-port = <ETHSS_GMAC1_PORT>;
 	status = "okay";
 };
+
+#if (SEL_PCIE)
+&pcie0 {
+	status = "okay";
+};
+#endif
 
 &ohci {
 	memory-region = <&global_cma>;
