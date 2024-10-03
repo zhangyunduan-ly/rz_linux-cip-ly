@@ -252,6 +252,11 @@
 			pinmux = <RZG2L_PORT_PINMUX(9, 4, 14)>; /* SD1_CD */
 		};
 	};
+
+	usb20_pins: usb20 {
+		pinmux = <RZG2L_PORT_PINMUX(9, 5, 14)>, /* VBUS */
+			 <RZG2L_PORT_PINMUX(9, 6, 14)>; /* OVC */
+	};
 };
 
 &qextal_clk {
@@ -316,4 +321,31 @@
 
 &rtc {
         status = "okay";
+};
+
+&ohci0 {
+	memory-region = <&global_cma>;
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&ehci0 {
+	memory-region = <&global_cma>;
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&hsusb {
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&usb20phyrst {
+	status = "okay";
+};
+
+&usb2_phy0 {
+	pinctrl-0 = <&usb20_pins>;
+	pinctrl-names = "default";
+	status = "okay";
 };
