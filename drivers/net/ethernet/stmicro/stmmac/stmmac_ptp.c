@@ -182,8 +182,7 @@ static int ethsw_timer_adjust_freq(struct ptp_clock_info *ptp, s32 ppb)
 	u32 tick_diff;
 	int neg_adj = 0;
 
-	tick_diff = priv->default_addend;
-	tick = (u64)tick_diff + NSEC_PER_SEC;
+	tick = NSEC_PER_SEC;
 
 	delta = (s64)tick * ppb;
 	delta = div_s64(delta, NSEC_PER_SEC);
