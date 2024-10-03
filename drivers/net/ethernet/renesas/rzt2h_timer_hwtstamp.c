@@ -26,8 +26,6 @@ void ethsw_time_init(void __iomem *ioaddr, u32 timer)
 	/* Initialize ETHSW Timer increments with every clock cycle */
 	ethsw_timer_reg_rmw(ioaddr, ETHSW_ATIME_INC(timer),
 			    ETHSW_ATIME_INC_PERIOD_MASK, ETHSW_ATIME_INC_PERIOD_NORMAL);
-	/* As default ETHSW timer need to correct speed up 41083000 tick per second */
-	ethsw_time_adjust_inc(ioaddr, 41080000, 0, ETHSW_ATIME_CLK_RATE, timer);
 	/* Start timer */
 	ethsw_timer_reg_rmw(ioaddr, ETHSW_ATIME_CTRL(timer), ETHSW_ATIME_CTRL_ENABLE, 1);
 }
