@@ -63,6 +63,7 @@ properties:
               - renesas,sdhi-r9a09g011 # RZ/V2M
               - renesas,sdhi-r9a09g047 # RZ/G3E
               - renesas,sdhi-r9a09g057 # RZ/V2H
+              - renesas,sdhi-r9a09g056 # RZ/V2N
           - const: renesas,rcar-gen3-sdhi # R-Car Gen3 or RZ/G2
       - items:
           - enum:
