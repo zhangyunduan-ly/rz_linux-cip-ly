@@ -10,12 +10,24 @@
 #include <dt-bindings/pinctrl/rzg2l-pinctrl.h>
 #include <dt-bindings/gpio/gpio.h>
 
+/* SD0-eMMC selection
+ *
+ * CN15 can be connected to SD0 or eMMC sub-board.
+ * Please setting the below Macro to the corresponding value depend on
+ * the sub-board connected.
+ *
+ * SEL_SD0: 0: eMMC (default);		1: SD0
+ */
+#define SEL_SD0		0
+
 / {
 	model = "Renesas EVK based on r9a09g056n44";
 	compatible = "renesas,r9a09g056n44-evk", "renesas,r9a09g056n44", "renesas,r9a09g056";
 
 	aliases {
 		serial0 = &scif;
+		mmc0 = &sdhi0;
+		mmc1 = &sdhi1;
 		ethernet0 = &eth0;
 		ethernet1 = &eth1;
 	};
@@ -210,6 +222,36 @@
 		pins =  "SCIF_TXD", "SCIF_RXD";
 		renesas,output-impedance = <1>;
 	};
+
+	sd0_pwr_en {
+		gpio-hog;
+		gpios = <RZG2L_GPIO(10, 1) GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "sd0_pwr_en";
+	};
+
+	sd1_pwr_en {
+		gpio-hog;
+		gpios = <RZG2L_GPIO(10, 3) GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "sd1_pwr_en";
+	};
+
+#if (SEL_SD0)
+	/* Support pinctrl for SD function of SDHI0 */
+	sdhi0_pins: sd0 {
+		sd0_mux {
+			pinmux = <RZG2L_PORT_PINMUX(10, 5, 15)>; /* SD0_CD */
+		};
+	};
+#endif
+
+	/* Support pinctrl for SD function of SDHI1 */
+	sdhi1_pins: sd1 {
+		sd1_mux {
+			pinmux = <RZG2L_PORT_PINMUX(9, 4, 14)>; /* SD1_CD */
+		};
+	};
 };
 
 &qextal_clk {
@@ -232,5 +274,42 @@
 };
 
 &wdt1 {
+	status = "okay";
+};
+
+#if (!SEL_SD0)
+&sdhi0 {
+	vmmc-supply = <&reg_3p3v>;
+	vqmmc-supply = <&reg_1p8v>;
+	bus-width = <8>;
+	mmc-hs200-1_8v;
+	non-removable;
+	fixed-emmc-driver-type = <1>;
+	status = "okay";
+};
+#else
+&sdhi0 {
+	pinctrl-0 = <&sdhi0_pins>;
+	pinctrl-names = "default";
+
+	vmmc-supply = <&reg_3p3v>;
+	vqmmc-supply = <&vccq_sdhi0>;
+
+	bus-width = <4>;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	status = "okay";
+};
+#endif
+
+&sdhi1 {
+	pinctrl-0 = <&sdhi1_pins>;
+	pinctrl-names = "default";
+
+	vmmc-supply = <&reg_3p3v>;
+	vqmmc-supply = <&vccq_sdhi1>;
+	bus-width = <4>;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
 	status = "okay";
 };
