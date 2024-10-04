@@ -313,3 +313,7 @@
 	sd-uhs-sdr104;
 	status = "okay";
 };
+
+&rtc {
+        status = "okay";
+};
