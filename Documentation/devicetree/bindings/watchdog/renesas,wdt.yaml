@@ -73,6 +73,7 @@ properties:
               - renesas,r8a779g0-wdt     # R-Car V4H
           - const: renesas,rcar-gen4-wdt # R-Car Gen4
       - const: renesas,r9a09g057-wdt       # RZ/V2H(P)
+      - const: renesas,r9a09g056-wdt       # RZ/V2N(P)
 
   reg:
     maxItems: 1
@@ -136,6 +137,7 @@ allOf:
           contains:
             enum:
               - renesas,r9a09g057-wdt
+              - renesas,r9a09g056-wdt
               - renesas,rzg2l-wdt
               - renesas,rzv2m-wdt
     then:
@@ -175,6 +177,7 @@ allOf:
         compatible:
           contains:
             const: renesas,r9a09g057-wdt
+            const: renesas,r9a09g056-wdt
     then:
       properties:
         interrupts: false
