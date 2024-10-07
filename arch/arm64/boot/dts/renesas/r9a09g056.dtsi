@@ -342,8 +342,8 @@
 			compatible = "renesas,sdhi-r9a09g056",
 				     "renesas,rcar-gen3-sdhi";
 			reg = <0x0 0x15c00000 0 0x10000>;
-			interrupts = <GIC_SPI 735 IRQ_TYPE_LEVEL_LOW>,
-				     <GIC_SPI 736 IRQ_TYPE_LEVEL_LOW>;
+			interrupts = <GIC_SPI 735 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 736 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&cpg CPG_MOD 0xa3>,
 				 <&cpg CPG_MOD 0xa5>,
 				 <&cpg CPG_MOD 0xa4>,
@@ -358,8 +358,8 @@
 			compatible = "renesas,sdhi-r9a09g056",
 					"renesas,rcar-gen3-sdhi";
 			reg = <0x0 0x15c10000 0 0x10000>;
-			interrupts = <GIC_SPI 737 IRQ_TYPE_LEVEL_LOW>,
-				     <GIC_SPI 738 IRQ_TYPE_LEVEL_LOW>;
+			interrupts = <GIC_SPI 737 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 738 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&cpg CPG_MOD 0xa7>,
 				 <&cpg CPG_MOD 0xa9>,
 				 <&cpg CPG_MOD 0xa8>,
@@ -374,8 +374,8 @@
 			compatible = "renesas,sdhi-r9a09g056",
 					"renesas,rcar-gen3-sdhi";
 			reg = <0x0 0x15c20000 0 0x10000>;
-			interrupts = <GIC_SPI 739 IRQ_TYPE_LEVEL_LOW>,
-				     <GIC_SPI 740 IRQ_TYPE_LEVEL_LOW>;
+			interrupts = <GIC_SPI 739 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 740 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&cpg CPG_MOD 0xab>,
 				 <&cpg CPG_MOD 0xad>,
 				 <&cpg CPG_MOD 0xac>,
