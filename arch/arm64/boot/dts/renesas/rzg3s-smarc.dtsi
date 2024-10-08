@@ -285,10 +285,10 @@
 	};
 
 	ssi3_pins: ssi3 {
-		pinmux = <RZG2L_PORT_PINMUX(18, 1, 8)>, /* BCK */
-			 <RZG2L_PORT_PINMUX(18, 2, 8)>, /* RCK */
-			 <RZG2L_PORT_PINMUX(18, 3, 8)>, /* TXD */
-			 <RZG2L_PORT_PINMUX(18, 4, 8)>; /* RXD */
+		pinmux = <RZG2L_PORT_PINMUX(18, 2, 8)>, /* BCK */
+			 <RZG2L_PORT_PINMUX(18, 3, 8)>, /* RCK */
+			 <RZG2L_PORT_PINMUX(18, 4, 8)>, /* TXD */
+			 <RZG2L_PORT_PINMUX(18, 5, 8)>; /* RXD */
 	};
 
 	usb0_pins: usb0 {
