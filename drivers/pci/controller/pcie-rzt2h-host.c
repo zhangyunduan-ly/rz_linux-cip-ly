@@ -97,11 +97,12 @@ struct rzt2h_pcie_host {
 	int			(*phy_init_fn)(struct rzt2h_pcie_host *host);
 	struct irq_domain	*intx_domain;
 	struct reset_control    *rst;
+	int			lane;
 };
 
 static void __iomem	*supplemental;
 
-static int rzt2h_pcie_hw_init(struct rzt2h_pcie *pcie);
+static int rzt2h_pcie_hw_init(struct rzt2h_pcie *pcie, int lane);
 
 static int rzt2h_pcie_request_issue(struct rzt2h_pcie *pcie, struct pci_bus *bus)
 {
@@ -645,7 +646,7 @@ static int PCIE_INT_Initialize(struct rzt2h_pcie *pcie)
 	return 0;
 }
 
-static int rzt2h_pcie_hw_init(struct rzt2h_pcie *pcie)
+static int rzt2h_pcie_hw_init(struct rzt2h_pcie *pcie, int lane)
 {
 	unsigned int timeout = 500;
 	u32 value;
@@ -653,6 +654,25 @@ static int rzt2h_pcie_hw_init(struct rzt2h_pcie *pcie)
 	/* Set to the PCIe reset state   : step6 */
 	rzt2h_pci_write_reg(pcie, 0, PCI_RC_RESET_REG);
 	rzt2h_pci_write_reg(pcie, RST_CFG_B | RST_LOAD_B, PCI_RC_RESET_REG);			/* Set PCI_RC 310h */
+
+	/* Choose pcie lane */
+	if (lane == 1) {
+		rzt2h_pci_write_reg(pcie, CFG_HWINIT_EN, PERMISSION_REG);
+		writel(0x0, pcie->base + PCI_RC_LEQCTL);
+		msleep(1);
+		writel(PCI_RC_1_LANE, pcie->base + PCI_RC_LEQCTL);
+		rzt2h_pci_write_reg(pcie, 0, PERMISSION_REG);
+	} else if (lane == 2) {
+		rzt2h_pci_write_reg(pcie, CFG_HWINIT_EN, PERMISSION_REG);
+		writel(0x0, pcie->base + PCI_RC_LEQCTL);
+		msleep(1);
+		writel(PCI_RC_2_LANE, pcie->base + PCI_RC_LEQCTL);
+		rzt2h_pci_write_reg(pcie, 0, PERMISSION_REG);
+	} else {
+		dev_info(pcie->dev, "Please correct pcie lanes\n");
+		return 0;
+	}
+	writel(MODE_EQ_AUTONOMOUS, pcie->base + PCI_RC_PCCTRL1);
 
 	rzt2h_pcie_setting_phy(pcie);
 	/* Setting of HWINT related registers : step8 */
@@ -1149,7 +1169,7 @@ static int rzt2h_pcie_probe(struct platform_device *pdev)
 	struct rzt2h_pcie_host *host;
 	struct rzt2h_pcie *pcie;
 	u32 data;
-	int err;
+	int err, lane;
 	struct pci_host_bridge *bridge;
 
 	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
@@ -1196,7 +1216,15 @@ static int rzt2h_pcie_probe(struct platform_device *pdev)
 	if (err)
 		return err;
 
-	err = rzt2h_pcie_hw_init(pcie);
+	err = of_property_read_u32(dev->of_node, "pcie-lane", &lane);
+	if (err) {
+		dev_err(pcie->dev, "%pOF: No pcie-lane property found\n",
+				dev->of_node);
+		return -EINVAL;
+	}
+	host->lane = lane;
+
+	err = rzt2h_pcie_hw_init(pcie, host->lane);
 	if (err) {
 		dev_info(&pdev->dev, "PCIe link down\n");
 		return 0;
@@ -1274,7 +1302,7 @@ static int rzt2h_pcie_resume(struct device *dev)
 	if (rzt2h_pci_read_reg(pcie, AXI_WINDOW_BASEL_REG(0)) !=
 		pcie->save_reg.axi_window.base[0]) {
 
-		err = rzt2h_pcie_hw_init(pcie);
+		err = rzt2h_pcie_hw_init(pcie, host->lane);
 		if (err) {
 			dev_info(pcie->dev, "resume PCIe link down\n");
 			return err;
