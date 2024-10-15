@@ -100,7 +100,7 @@
 
 /* RSCFDnCFDGAFLECTR / RSCFDnGAFLECTR */
 #define RCANFD_GAFLECTR_AFLDAE		BIT(8)
-#define RCANFD_GAFLECTR_AFLPN(gpriv, x)	((x) & reg_rzv2h(gpriv, 0xf, 0x1f))
+#define RCANFD_GAFLECTR_AFLPN(gpriv, x)	((x) & reg_rzv2h(gpriv, 0x3f, 0x1f))
 
 /* RSCFDnCFDGAFLIDj / RSCFDnGAFLIDj */
 #define RCANFD_GAFLID_GAFLLB		BIT(29)
@@ -118,7 +118,7 @@
 
 /* RSCFDnCFDCmNCFG - CAN FD only */
 #define RCANFD_NCFG_NTSEG2(gpriv, x) \
-		(((x) & reg_rzv2h(gpriv, 0x3f, 0x1f)) << reg_rzv2h(gpriv, 25, 24))
+		(((x) & reg_rzv2h(gpriv, 0x7f, 0x1f)) << reg_rzv2h(gpriv, 25, 24))
 
 #define RCANFD_NCFG_NTSEG1(gpriv, x) \
 		(((x) & reg_rzv2h(gpriv, 0xff, 0x7f)) << reg_rzv2h(gpriv, 17, 16))
@@ -744,16 +744,7 @@ static int rcar_canfd_reset_controller(struct rcar_canfd_global *gpriv)
 	rcar_canfd_write(gpriv->base, RCANFD_GERFL, 0x0);
 
 	/* Set the controller into appropriate mode */
-	if (is_rzv2h(gpriv)) {
-		if (gpriv->fdmode)
-			for_each_set_bit(ch, &gpriv->channels_mask, gpriv->max_channels)
-				rcar_canfd_set_bit(gpriv->base, RCANFD_V2H_FDCFG(ch),
-						   RCANFD_FDCFG_FDOE);
-		else
-			for_each_set_bit(ch, &gpriv->channels_mask, gpriv->max_channels)
-				rcar_canfd_set_bit(gpriv->base, RCANFD_V2H_FDCFG(ch),
-						   RCANFD_FDCFG_CLOE);
-	} else {
+	if (!is_rzv2h(gpriv)) {
 		if (gpriv->fdmode)
 			rcar_canfd_set_bit(gpriv->base, RCANFD_GRMCFG,
 					   RCANFD_GRMCFG_RCMC);
@@ -778,6 +769,18 @@ static int rcar_canfd_reset_controller(struct rcar_canfd_global *gpriv)
 			dev_dbg(&gpriv->pdev->dev,
 				"channel %u reset failed\n", ch);
 			return err;
+		}
+
+		/* Set mode for the controller */
+		if (is_rzv2h(gpriv)) {
+			if (gpriv->fdmode)
+				rcar_canfd_set_bit(gpriv->base,
+						   RCANFD_V2H_FDCFG(ch),
+						   RCANFD_FDCFG_FDOE);
+			else
+				rcar_canfd_set_bit(gpriv->base,
+						   RCANFD_V2H_FDCFG(ch),
+						   RCANFD_FDCFG_CLOE);
 		}
 	}
 	return 0;
@@ -842,7 +845,9 @@ static void rcar_canfd_configure_afl_rules(struct rcar_canfd_global *gpriv,
 	rcar_canfd_set_bit(gpriv->base, RCANFD_GAFLCFG(ch),
 				   RCANFD_GAFLCFG_SETRNC(gpriv, ch, num_rules));
 
-	if (gpriv->fdmode)
+	if (is_rzv2h(gpriv))
+		offset = RCANFD_F_GAFL_OFFSET(gpriv);
+	else if (gpriv->fdmode)
 		offset = RCANFD_F_GAFL_OFFSET(gpriv);
 	else
 		offset = RCANFD_C_GAFL_OFFSET;
@@ -1388,8 +1393,14 @@ static void rcar_canfd_set_bittiming(struct net_device *dev)
 			   brp, sjw, tseg1, tseg2);
 	} else {
 		/* Classical CAN only mode */
-		cfg = (RCANFD_CFG_TSEG1(tseg1) | RCANFD_CFG_BRP(brp) |
-			RCANFD_CFG_SJW(sjw) | RCANFD_CFG_TSEG2(tseg2));
+		if (is_rzv2h(gpriv))
+			cfg = (RCANFD_NCFG_NTSEG1(gpriv, tseg1) |
+			       RCANFD_NCFG_NBRP(brp) |
+			       RCANFD_NCFG_NSJW(gpriv, sjw) |
+			       RCANFD_NCFG_NTSEG2(gpriv, tseg2));
+		else
+			cfg = (RCANFD_CFG_TSEG1(tseg1) | RCANFD_CFG_BRP(brp) |
+			       RCANFD_CFG_SJW(sjw) | RCANFD_CFG_TSEG2(tseg2));
 
 		rcar_canfd_write(priv->base, RCANFD_CCFG(ch), cfg);
 		netdev_dbg(priv->ndev,
@@ -1539,7 +1550,7 @@ static netdev_tx_t rcar_canfd_start_xmit(struct sk_buff *skb,
 
 	dlc = RCANFD_CFPTR_CFDLC(can_len2dlc(cf->len));
 
-	if (priv->can.ctrlmode & CAN_CTRLMODE_FD) {
+	if (priv->can.ctrlmode & CAN_CTRLMODE_FD || is_rzv2h(gpriv)) {
 		rcar_canfd_write(priv->base,
 				 RCANFD_F_CFID(gpriv, ch, RCANFD_CFFIFO_IDX), id);
 		rcar_canfd_write(priv->base,
@@ -1600,7 +1611,7 @@ static void rcar_canfd_rx_pkt(struct rcar_canfd_channel *priv)
 	u32 ch = priv->channel;
 	u32 ridx = ch + RCANFD_RFFIFO_IDX;
 
-	if (priv->can.ctrlmode & CAN_CTRLMODE_FD) {
+	if (priv->can.ctrlmode & CAN_CTRLMODE_FD || is_rzv2h(gpriv)) {
 		id = rcar_canfd_read(priv->base, RCANFD_F_RFID(gpriv, ridx));
 		dlc = rcar_canfd_read(priv->base, RCANFD_F_RFPTR(gpriv, ridx));
 
@@ -1649,6 +1660,8 @@ static void rcar_canfd_rx_pkt(struct rcar_canfd_channel *priv)
 		cf->len = get_can_dlc(RCANFD_RFPTR_RFDLC(dlc));
 		if (id & RCANFD_RFID_RFRTR)
 			cf->can_id |= CAN_RTR_FLAG;
+		else if (is_rzv2h(gpriv))
+			rcar_canfd_get_data(priv, cf, RCANFD_F_RFDF(gpriv, ridx, 0));
 		else
 			rcar_canfd_get_data(priv, cf, RCANFD_C_RFDF(ridx, 0));
 	}
