@@ -793,6 +793,7 @@
 
 #if (!SEL_ETHSS_PCIE)
 &pcie0 {
+	pcie-lane = <1>;
 	status = "okay";
 };
 #endif
