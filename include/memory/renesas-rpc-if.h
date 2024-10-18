@@ -69,6 +69,7 @@ struct rpcif {
 	struct device *dev;
 	void __iomem *base;
 	void __iomem *dirmap;
+	struct clk *parent_clk, *sel_clk, *pllcm33_clk;
 	struct regmap *regmap;
 	struct reset_control *rstc;
 	const struct rpcif_ops *ops;

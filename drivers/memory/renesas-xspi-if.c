@@ -279,6 +279,7 @@ int xspi_sw_init(struct rpcif *xspi, struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct resource *res;
+	int err;
 
 	xspi->dev = dev;
 
@@ -303,12 +304,38 @@ int xspi_sw_init(struct rpcif *xspi, struct device *dev)
 	xspi->type = (uintptr_t)of_device_get_match_data(dev);
 	xspi->rstc = devm_reset_control_array_get_exclusive(&pdev->dev);
 
+	xspi->pllcm33_clk = devm_clk_get(&pdev->dev, "pllcm33_xspi");
+	if (IS_ERR(xspi->pllcm33_clk)) {
+		err = PTR_ERR(xspi->pllcm33_clk);
+		dev_err(&pdev->dev, "cannot get pllcm33 xspi clock, error %d\n",
+			err);
+		return err;
+	}
+
+	xspi->parent_clk = devm_clk_get(&pdev->dev, "parent_clk");
+	if (IS_ERR(xspi->parent_clk)) {
+		err = PTR_ERR(xspi->parent_clk);
+		dev_err(&pdev->dev, "cannot get parent clock, error %d\n",
+			 err);
+		return err;
+	}
+
+	xspi->sel_clk = devm_clk_get(&pdev->dev, "sel_clk");
+	if (IS_ERR(xspi->sel_clk)) {
+		err = PTR_ERR(xspi->sel_clk);
+		dev_err(&pdev->dev, "cannot get sel clock, error %d\n",
+			err);
+		return err;
+	}
+
 	return PTR_ERR_OR_ZERO(xspi->rstc);
 }
 EXPORT_SYMBOL(xspi_sw_init);
 
 int xspi_hw_init(struct rpcif *xspi, bool hyperflash)
 {
+	int ret;
+
 	pm_runtime_get_sync(xspi->dev);
 
 	reset_control_reset(xspi->rstc);
@@ -328,6 +355,18 @@ int xspi_hw_init(struct rpcif *xspi, bool hyperflash)
 
 	regmap_update_bits(xspi->regmap, XSPI_INTE, XSPI_INTE_CMDCMPE,
 			XSPI_INTE_CMDCMPE);
+
+	ret = clk_set_parent(xspi->sel_clk, xspi->parent_clk);
+	if (ret < 0) {
+		dev_err(xspi->dev, "cannot get sel clock, error %d\n", ret);
+		return ret;
+	}
+
+	ret = clk_set_rate(xspi->pllcm33_clk, 266666667);
+	if (ret < 0) {
+		dev_err(xspi->dev, "cannot get sel clock, error %d\n", ret);
+		return ret;
+	}
 
 	return 0;
 }
