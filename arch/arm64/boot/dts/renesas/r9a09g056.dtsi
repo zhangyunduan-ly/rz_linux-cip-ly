@@ -795,8 +795,12 @@
 			clocks = <&cpg CPG_MOD 0xa1>,
 				 <&cpg CPG_MOD 0x9f>,
 				 <&cpg CPG_MOD 0xa0>,
-				 <&cpg CPG_MOD 0xa2>;
-			clock-names = "spi", "hclk", "aclk", "spix2";
+				 <&cpg CPG_MOD 0xa2>,
+				 <&cpg CPG_CORE CLK_SMUX2_XSPI_CLK1>,
+				 <&cpg CPG_CORE CLK_SMUX2_XSPI_CLK0>,
+				 <&cpg CPG_CORE CLK_PLLCM33_XSPI>;
+			clock-names = "spi", "hclk", "aclk", "spix2",
+				 "sel_clk", "parent_clk", "pllcm33_xspi";
 			resets = <&cpg 0xa3>,
 				 <&cpg 0xa4>;
 			power-domains = <&cpg>;
