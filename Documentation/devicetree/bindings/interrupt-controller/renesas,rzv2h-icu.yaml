@@ -21,6 +21,7 @@ description:
 properties:
   compatible:
     const: renesas,r9a09g057-icu # RZ/V2H(P)
+    const: renesas,r9a09g056-icu # RZ/V2N(P)
 
   '#interrupt-cells':
     description: The first cell is the SPI number of the NMI or the
