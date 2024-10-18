@@ -159,6 +159,19 @@
 		gpios-states = <1>;
 		states = <3300000 0 1800000 1>;
 	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+
+		nmi {
+			interrupt-parent = <&icu>;
+			interrupts = <0 IRQ_TYPE_EDGE_FALLING>;
+			linux,code = <4>;
+			label = "NMI";
+			wakeup-source;
+		};
+	};
 };
 
 &eth0 {

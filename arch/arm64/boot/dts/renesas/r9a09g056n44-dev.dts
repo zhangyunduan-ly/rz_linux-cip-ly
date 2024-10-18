@@ -173,6 +173,19 @@
 	vspm_if {
 		compatible = "renesas,vspm_if";
 	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+
+		nmi {
+			interrupt-parent = <&icu>;
+			interrupts = <0 IRQ_TYPE_EDGE_FALLING>;
+			linux,code = <4>;
+			label = "NMI";
+			wakeup-source;
+		};
+	};
 };
 
 &audio_extal_clk {
