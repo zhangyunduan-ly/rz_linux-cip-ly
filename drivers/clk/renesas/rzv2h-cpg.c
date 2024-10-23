@@ -60,10 +60,10 @@
 /* For RZ/V2H LCDC_DCLK clk ranges */
 #define RZV2H_PLLDSI_DIV_MIN		(12000000)
 #define RZV2H_PLLDSI_DIV_MAX		(188000000)
-#define RZV2H_PLLDSI_DIV_MIN_SET	(32000000)
+#define RZV2H_PLLDSI_DIV_MIN_SET	(25000000)
 #define RZV2H_PLL_DIV_M_MAX		(533)
 #define RZV2H_PLL_DIV_M_MIN		(64)
-#define RZV2H_PLLDSI_MAX		(1210800000)
+#define RZV2H_PLLDSI_MAX		(375000000)
 #define RZV2H_PLLDSI_MIN		(25000000)
 #define RZV2H_PLLFVCO_MAX		(3200000000)
 #define RZV2H_PLLFVCO_MIN		(1600000000)
@@ -154,7 +154,7 @@ static unsigned long rzv2h_cpg_plldsi_div_recalc_rate(struct clk_hw *hw,
 
 	div = readl(priv->base + cfg_sdiv.offset);
 	div >>= shift;
-	div &= ((2 ^ width) - 1);
+	div &= ((2 << width) - 1);
 
 	div = plldsi_div->dtable[div].div;
 
@@ -294,57 +294,52 @@ static int rzv2h_cpg_plldsi_set_rate(struct clk_hw *hw,
 	struct pll_clk *pll_clk = to_pll(hw);
 	struct rzv2h_cpg_priv *priv = pll_clk->priv;
 	u32 pll_m, pll_p, pll_s, val;
-	s32 pll_k;
-	u64 div;
+	int pll_k;
 	u32 conf = pll_clk->conf;
 	int ret;
-	unsigned long fvco;
-	bool found = 0;
+	unsigned long fvco, osc;
 
 	if (rate > RZV2H_PLLDSI_MAX)
 		rate = RZV2H_PLLDSI_MAX;
 	else if (rate < RZV2H_PLLDSI_MIN)
 		rate = RZV2H_PLLDSI_MIN;
 
-	for (pll_s = 6; pll_s >= 0; pll_s--) {
+	osc = EXTAL_FREQ_IN_MEGA_HZ * MEGA;
+	for (pll_s = 0; pll_s <= 6; pll_s++) {
 		/* Check available range of FVCO */
 		fvco = rate * (1 << pll_s);
 		if ((fvco > RZV2H_PLLFVCO_MAX) || (fvco < RZV2H_PLLFVCO_MIN))
 			continue;
 
-		for (pll_p = 4; pll_p > 0; pll_p--) {
-			div = (EXTAL_FREQ_IN_MEGA_HZ * MEGA);
-			div /= (pll_p * (1 << pll_s));
-
-			pll_m = ((u64)rate / div);
-			/* Check available range of M_DIV */
-			if ((pll_m < RZV2H_PLL_DIV_M_MIN) || (pll_m > RZV2H_PLL_DIV_M_MAX))
-				continue;
-
-			pll_k = ((u64)rate % div);
+		for (pll_p = 0; pll_p <= 4; pll_p++) {
+			pll_m = ((u64) (fvco * pll_p) / osc);
+			pll_k = ((u64)(fvco * pll_p) % osc);
 			/* Check available range of K_DIV */
-			if (pll_k >= (div / 2)) {
+			if (pll_k >= (osc / 2)) {
 				pll_m++;
 				if (pll_m > RZV2H_PLL_DIV_M_MAX)
 					continue;
-				pll_k = pll_k - div;
+				pll_k = pll_k - osc;
 			}
 
-			pll_k = div_s64(((s64)pll_k << 16), div);
+			/* Check available range of M_DIV */
+			if ((pll_m < RZV2H_PLL_DIV_M_MIN) ||
+			    (pll_m > RZV2H_PLL_DIV_M_MAX))
+				continue;
 
-			found = 1;
-			break;
+			pll_k = DIV_S64_ROUND_CLOSEST(((s64)pll_k << 16), osc);
+			goto found;
 		}
-
-		if (found)
-			break;
 	}
 
-	if (!found) {
-		dev_err(priv->dev, "failed to set %s to rate %lu\n",
-			clk_hw_get_name(hw), rate);
-		return -EINVAL;
-	}
+	dev_err(priv->dev, "failed to set %s to rate %lu\n",
+		clk_hw_get_name(hw), rate);
+	return -EINVAL;
+
+found:
+	dev_dbg(priv->dev,
+		 "rate: %ld pll_k: %hd, pll_m: %d, pll_p: %d, pll_s: %d\n",
+		 rate, pll_k, pll_m, pll_p, pll_s);
 
 	/* Put PLL into standby mode */
 	writel(RZV2H_CPG_PLL_STBY_RESETB_WEN,
@@ -363,7 +358,9 @@ static int rzv2h_cpg_plldsi_set_rate(struct clk_hw *hw,
 	       priv->base + GET_REG_SAMPLL_CLK1(conf));
 
 	/* Output clock setting 2 */
-	writel(pll_s, priv->base + GET_REG_SAMPLL_CLK2(conf));
+	val = readl(priv->base + GET_REG_SAMPLL_CLK2(conf));
+	writel((val & ~GENMASK(2, 0)) | pll_s,
+		priv->base + GET_REG_SAMPLL_CLK2(conf));
 
 	/* Put PLL to normal mode */
 	writel(RZV2H_CPG_PLL_STBY_RESETB_WEN | RZV2H_CPG_PLL_STBY_RESETB,
