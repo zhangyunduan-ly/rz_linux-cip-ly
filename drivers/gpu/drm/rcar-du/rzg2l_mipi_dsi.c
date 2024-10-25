@@ -16,6 +16,7 @@
 #include <linux/reset.h>
 #include <linux/slab.h>
 #include <asm-generic/delay.h>
+#include <linux/units.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -34,6 +35,36 @@
 #include "rzg2l_mipi_dsi.h"
 
 #define RZ_G2L_MIPI_DSI_MAX_DATA_LANES	4
+
+/* RZ/V2H & RZ/V2N DPHY PLL setting range */
+#define EXTAL_FREQ_IN_MEGA_HZ			(24)
+#define RZV2H_MIPI_DPHY_OSC_CLK_IN_MEGA		(24)
+#define RZV2H_MIPI_DPHY_FVCO_MIN_IN_MEGA	(1050)
+#define RZV2H_MIPI_DPHY_FVCO_MAX_IN_MEGA	(2100)
+#define RZV2H_MIPI_DPHY_FOUT_MIN_IN_MEGA	(80)
+#define RZV2H_MIPI_DPHY_FOUT_MAX_IN_MEGA	(1500)
+#define RZV2H_MIPI_DPHY_PLL_M_MIN		(64)
+#define RZV2H_MIPI_DPHY_PLL_M_MAX		(1023)
+#define RZV2H_MIPI_DPHY_PLL_P_MIN		(1)
+#define RZV2H_MIPI_DPHY_PLL_P_MAX		(4)
+#define RZV2H_MIPI_DPHY_PLL_S_MIN		(0)
+#define RZV2H_MIPI_DPHY_PLL_S_MAX		(5)
+
+#define CPG_BASE				(0x10420000)
+
+/* RZ/V2H & RZ/V2N CPG PLLDSI CLK1 Register */
+#define CPG_PLLDSI_CLK1		(0xc4)
+#define CPG_PLLDSI_KDIV(val)	((s16)FIELD_GET(GENMASK(31, 16), (val)))
+#define CPG_PLLDSI_MDIV(val)	FIELD_GET(GENMASK(15, 6), (val))
+#define CPG_PLLDSI_PDIV(val)	FIELD_GET(GENMASK(5, 0), (val))
+
+/* RZ/V2H & RZ/V2N CPG PLLDSI CLK2 Register */
+#define CPG_PLLDSI_CLK2		(0xc8)
+#define CPG_PLLDSI_SDIV(val)	FIELD_GET(GENMASK(2, 0), (val))
+
+/* RZ/V2H & RZ/V2N CPG CSDIV1 Register */
+#define CPG_CSDIV1		(0x504)
+#define CPG_CSDIV1_PLLDSI(val)	FIELD_GET(GENMASK(11, 8), (val))
 
 enum mipi_dsi_dphy_type {
 	MIPI_DSI_DPHY_RZ_G2L,
@@ -359,8 +390,9 @@ static int dphy_find_timings_val(struct rzg2l_mipi_dsi *mipi_dsi,
 	int i;
 
 	for (i = 1; i < size; i++) {
-		if (freq <= timings[i].hsfreq) {
-			i = (mipi_dsi->hsfreq < timings[i].hsfreq) ? (i - 1) : i;
+		if (freq <= (timings[i].hsfreq * 1000)) {
+			i = (mipi_dsi->hsfreq < (timings[i].hsfreq * 1000)) ?
+			    (i - 1) : i;
 			break;
 		}
 	}
@@ -400,7 +432,7 @@ static void rzg2l_mipi_dsi_dphy_init(struct rzg2l_mipi_dsi *mipi_dsi)
 		u32 dphyctrl0, dphytim0, dphytim1, dphytim2, dphytim3;
 
 		/* All recommended setting of DSI global operation timings */
-		if (mipi_dsi->hsfreq > 250000) {
+		if (mipi_dsi->hsfreq > 250000000) {
 			timings.tclk_miss = 1;
 			timings.t_init = 79801;
 			timings.tclk_prepare = 8;
@@ -467,9 +499,9 @@ static void rzg2l_mipi_dsi_dphy_init(struct rzg2l_mipi_dsi *mipi_dsi)
 	} else {
 		u32 phytclksetr, phythssetr, phytlpxsetr, phycr;
 		unsigned long lpclk_rate = clk_get_rate(mipi_dsi->clocks.lpclk);
-		u64 div, fout, fvco;
-		short pll_k;
-		unsigned int pll_s, pll_m, pll_p;
+		unsigned long osc, fout, fvco;
+		int pll_k;
+		int pll_s, pll_m, pll_p;
 		unsigned long hsfreq = mipi_dsi->hsfreq;
 
 		timings.tclk_trail =
@@ -549,43 +581,50 @@ static void rzg2l_mipi_dsi_dphy_init(struct rzg2l_mipi_dsi *mipi_dsi)
 		rzg2l_mipi_dsi_write(mipi_dsi->phy_mmio,
 				     PHYCR, phycr);
 
-		for (pll_p = 1; pll_p <= 4; pll_p++) {
-			for (pll_s = 0; pll_s <= 5; pll_s++) {
+		osc = RZV2H_MIPI_DPHY_OSC_CLK_IN_MEGA * MEGA;
+		for (pll_p = RZV2H_MIPI_DPHY_PLL_P_MAX;
+		     pll_p >= RZV2H_MIPI_DPHY_PLL_P_MIN; pll_p--) {
+			for (pll_s = RZV2H_MIPI_DPHY_PLL_S_MAX;
+			     pll_s >= RZV2H_MIPI_DPHY_PLL_S_MIN; pll_s--) {
+				/* Check FOUT condition */
 				fout = hsfreq;
-				if ((fout > 1500000) || (fout < 80000))
+				if ((fout > (RZV2H_MIPI_DPHY_FOUT_MAX_IN_MEGA * MEGA)) ||
+				    (fout < (RZV2H_MIPI_DPHY_FOUT_MIN_IN_MEGA * MEGA)))
 					continue;
 
+				/* Check FVCO condition */
 				fvco = fout * (1 << pll_s);
-				if ((fvco > 2100000) || (fvco < 1050000))
+				if ((fvco > (RZV2H_MIPI_DPHY_FVCO_MAX_IN_MEGA * MEGA)) ||
+				    (fvco < (RZV2H_MIPI_DPHY_FVCO_MIN_IN_MEGA * MEGA)))
 					continue;
 
-				div = 24000 / (pll_p * (1 << pll_s));
-				pll_m = fout / div;
-				pll_k = fout % div;
+				pll_m = (fvco * pll_p) / osc;
+				pll_k = (fvco * pll_p) % osc;
 
 				/* Check available range of PLL_K */
-				if (pll_k >= (div / 2)) {
+				if (pll_k >= (osc / 2)) {
 					pll_m++;
-					pll_k = pll_k - div;
+					pll_k = pll_k - osc;
 				}
 
 				/* Check available range of PLL_M */
-				if ((pll_m < 64) || (pll_m > 1023))
+				if ((pll_m < RZV2H_MIPI_DPHY_PLL_M_MIN) ||
+					(pll_m > RZV2H_MIPI_DPHY_PLL_M_MAX))
 					continue;
 
-				pll_k = div_s64(((s64)pll_k << 16), div);
+				pll_k = DIV_S64_ROUND_CLOSEST(((s64)pll_k << 16), osc);
 
 				goto found_pll;
 			}
 		}
 
 		dev_err(mipi_dsi->dev,
-			"Failed to find MIPI DSI PLL parameters\n");
+			 "Not found pll setting for %lu (Hz)\n", hsfreq);
 		return;
 found_pll:
-		dev_dbg(mipi_dsi->dev,
-			"pll_k: %hd, pll_m: %d, pll_p: %d, pll_s: %d\n",
-			pll_k, pll_m, pll_p, pll_s);
+		dev_info(mipi_dsi->dev,
+			 "hsfreq: %lu pll_k: %hd, pll_m: %d, pll_p: %d, pll_s: %d\n",
+			 hsfreq, pll_k, pll_m, pll_p, pll_s);
 
 		rzg2l_mipi_dsi_write(mipi_dsi->phy_mmio,
 				     PLLCLKSET0R,
@@ -616,6 +655,31 @@ static int rzg2l_mipi_dsi_startup(struct rzg2l_mipi_dsi *mipi_dsi)
 	u32 clkstpt;
 	u32 golpbkt;
 	unsigned int bpp;
+	unsigned long vclk_rate, osc;
+	void __iomem *cpg_base = NULL;
+	unsigned int val1, val2, csdiv;
+	u64 rate;
+
+	if (mipi_dsi->type == MIPI_DSI_DPHY_RZ_V2H) {
+		/* Calculate PLLDSI clock rate to get the precise vclk clock
+		 * for MIPI DPHY PLL calculation
+		 */
+		cpg_base = ioremap(CPG_BASE, 0x1000);
+
+		val1 = ioread32(cpg_base + CPG_PLLDSI_CLK1);
+		val2 = ioread32(cpg_base + CPG_PLLDSI_CLK2);
+		csdiv = ioread32(cpg_base + CPG_CSDIV1);
+
+		osc = EXTAL_FREQ_IN_MEGA_HZ * MEGA;
+		rate = osc / (2 * (1 << CPG_CSDIV1_PLLDSI(csdiv)));
+		rate = mul_u64_u32_shr(rate,
+		     (CPG_PLLDSI_MDIV(val1) << 16) + CPG_PLLDSI_KDIV(val1),
+	             16 + CPG_PLLDSI_SDIV(val2));
+
+		vclk_rate =
+		        DIV_ROUND_CLOSEST_ULL(rate, CPG_PLLDSI_PDIV(val1));
+	} else
+		vclk_rate = mode->clock * 1000;
 
 	/* Relationship between hsclk and vclk must follow:
 	 * vclk * bpp = hsclk * 8 * lanes
@@ -626,9 +690,8 @@ static int rzg2l_mipi_dsi_startup(struct rzg2l_mipi_dsi *mipi_dsi)
 	 *
 	 * hsclk(bit) = hsclk(byte) * 8
 	 */
-
 	bpp = mipi_dsi_pixel_format_to_bpp(mipi_dsi->format);
-	mipi_dsi->hsfreq = (mode->clock * bpp * 8) / (8 * mipi_dsi->lanes);
+	mipi_dsi->hsfreq = (vclk_rate * bpp * 8) / (8 * mipi_dsi->lanes);
 
 	/* Initializing DPHY before accessing LINK */
 	rzg2l_mipi_dsi_dphy_init(mipi_dsi);
@@ -669,12 +732,12 @@ static int rzg2l_mipi_dsi_startup(struct rzg2l_mipi_dsi *mipi_dsi)
 	 * and 4 data lanes.
 	 */
 
-	if (mipi_dsi->hsfreq > 445500) {
+	if (mipi_dsi->hsfreq > 445500000) {
 		clkkpt = 12;
 		clkbfht = 15;
 		clkstpt = 48;
 		golpbkt = 75;
-	} else if (mipi_dsi->hsfreq > 250000) {
+	} else if (mipi_dsi->hsfreq > 250000000) {
 		clkkpt = 7;
 		clkbfht = 8;
 		clkstpt = 27;
