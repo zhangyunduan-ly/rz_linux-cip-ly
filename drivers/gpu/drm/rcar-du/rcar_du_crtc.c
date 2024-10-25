@@ -13,6 +13,7 @@
 #include <linux/sys_soc.h>
 #include <linux/delay.h>
 #include <asm-generic/delay.h>
+#include <linux/units.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -315,6 +316,17 @@ struct rzv2h_cpg_param rzv2h_resolution_4_lanes_param[] = {
 	{ 148500, 0x4000,  74, 1, 0, 12 }, /* 1080p 148.5MHz */
 };
 
+/* RZ/V2H & RZ/V2N CPG PLL setting range */
+#define EXTAL_FREQ_IN_MEGA_HZ		(24)
+#define RZV2H_PLLDSI_DIV_MAX		(188000000)
+#define RZV2H_PLLDSI_DIV_MIN		(12000000)
+#define RZV2H_PLLDSI_MAX		(375000000)
+#define RZV2H_PLLDSI_MIN		(25000000)
+#define RZV2H_PLLFVCO_MAX		(3200000000)
+#define RZV2H_PLLFVCO_MIN		(1600000000)
+#define RZV2H_PLL_DIV_M_MAX		(533)
+#define RZV2H_PLL_DIV_M_MIN		(64)
+
 static void rcar_du_crtc_set_display_timing(struct rcar_du_crtc *rcrtc)
 {
 	const struct drm_display_mode *mode = &rcrtc->crtc.state->adjusted_mode;
@@ -332,37 +344,48 @@ static void rcar_du_crtc_set_display_timing(struct rcar_du_crtc *rcrtc)
 		u32 tableMax;
 
 		if (rcar_du_has(rcdu, RCAR_DU_FEATURE_RZV2H)) {
-			u64 div, fout, fvco;
+			unsigned long fout, fvco, osc;
 			unsigned int pll_s, pll_m, pll_p, csdiv;
-			short pll_k;
-			unsigned long vclk = mode->clock;
+			int pll_k, val;
+			unsigned long vclk = mode->clock * 1000;
 			unsigned int timeout = 10;
 
+			if (vclk > RZV2H_PLLDSI_DIV_MAX)
+				vclk = RZV2H_PLLDSI_DIV_MAX;
+			else if (vclk < RZV2H_PLLDSI_DIV_MIN)
+				vclk = RZV2H_PLLDSI_DIV_MIN;
+
 			for (csdiv = 2; csdiv <= 32; csdiv = csdiv + 2) {
-				for (pll_p = 1; pll_p <= 4; pll_p++) {
-					for (pll_s = 0; pll_s <= 6; pll_s++) {
-						fout = vclk * csdiv;
-						if ((fout > 1218000) || (fout < 25000))
-							continue;
+				osc = EXTAL_FREQ_IN_MEGA_HZ * MEGA;
+				fout = vclk * csdiv;
 
-						fvco = fout * (1 << pll_s);
-						if ((fvco > 3200000) || (fvco < 1600000))
-							continue;
+				if (fout > RZV2H_PLLDSI_MAX)
+					fout = RZV2H_PLLDSI_MAX;
+				else if (fout < RZV2H_PLLDSI_MIN)
+					fout = RZV2H_PLLDSI_MIN;
 
-						div = 24000 / (pll_p * (1 << pll_s));
-						pll_m = fout / div;
-						pll_k = fout % div;
+				for (pll_s = 0; pll_s <= 6; pll_s++) {
+					/* Check available range of FVCO */
+					fvco = fout * (1 << pll_s);
+					if ((fvco > RZV2H_PLLFVCO_MAX) || (fvco < RZV2H_PLLFVCO_MIN))
+						continue;
+
+					for (pll_p = 0; pll_p <= 4; pll_p++) {
+						pll_m = ((u64) (fvco * pll_p) / osc);
+						pll_k = ((u64)(fvco * pll_p) % osc);
 
 						/* Check available range of K_DIV */
-						if (pll_k >= (div / 2)) {
+						if (pll_k >= (osc / 2)) {
 							pll_m++;
-							pll_k = pll_k - div;
+							pll_k = pll_k - osc;
 						}
 
-						pll_k = div_s64(((s64)pll_k << 16), div);
-
-						if ((pll_m < 64) || (pll_m > 533))
+						/* Check available range of M_DIV */
+						if ((pll_m < RZV2H_PLL_DIV_M_MIN) ||
+						    (pll_m > RZV2H_PLL_DIV_M_MAX))
 							continue;
+
+						pll_k = DIV_S64_ROUND_CLOSEST(((s64)pll_k << 16), osc);
 
 						goto found_pll;
 					}
@@ -388,7 +411,8 @@ found_pll:
 				 (pll_k << 16) | (pll_m << 6) | (pll_p));
 
 			/* CPG_PLLDSI_CLK2: DIV_S */
-			reg_write(cpg_base + 0x0C8, pll_s);
+			val = ioread32(cpg_base + 0x0C8);
+			reg_write(cpg_base + 0x0C8, (val & ~GENMASK(2, 0)) | pll_s);
 
                         /* CPG_CSDIV1: CSDIV_2to32_PLLDSI */
 			reg_write(cpg_base + 0x504, BIT(24) | (csdiv << 8));
