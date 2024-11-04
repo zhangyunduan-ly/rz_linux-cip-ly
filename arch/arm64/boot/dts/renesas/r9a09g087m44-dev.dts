@@ -43,10 +43,10 @@
 
 /*
  * Set SEL_ETHSW_LCDC to below values to select using of:
- * - 0: ETHSW
- * - 1: LCDC (default)
+ * - 0: ETHSW (default)
+ * - 1: LCDC
  */
-#define SEL_ETHSW_LCDC		1
+#define SEL_ETHSW_LCDC		0
 
 /*
  * Set SEL_GPT_SD0 to below values to select using of:
