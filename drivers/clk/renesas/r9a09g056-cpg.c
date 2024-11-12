@@ -23,15 +23,17 @@ enum clk_pll {
 	PLLETH,
 	PLLDSI,
 	PLLDDR0,
-	PLLGPU,
+	PLLGPU = 9,
 	PLLDRP,
 };
 
 /* n is index of pll clock */
+#define RZV2N_CPG_SAMPLL_STBY(n)      (0x00 + (0x20 * n))
 #define RZV2N_CPG_SAMPLL_CLK1(n)      (0x04 + (0x20 * n))
 #define RZV2N_CPG_SAMPLL_CLK2(n)      (0x08 + (0x20 * n))
 
-#define RZ_V2N_PLL_CONF(n)  (RZV2N_CPG_SAMPLL_CLK1(n) << 22 | \
+#define RZ_V2N_PLL_CONF(n)  (RZV2N_CPG_SAMPLL_STBY(n) | \
+			     RZV2N_CPG_SAMPLL_CLK1(n) << 22 | \
 			     RZV2N_CPG_SAMPLL_CLK2(n) << 12)
 
 enum clk_ids {

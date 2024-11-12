@@ -53,8 +53,19 @@
 #define CLK_MRST_R(reg)		(0x180 + (reg))
 
 #define GET_REG_OFFSET(val)		((val >> 20) & 0xfff)
+#define GET_REG_SAMPLL_STBY(val)	((val) & 0xfff)
 #define GET_REG_SAMPLL_CLK1(val)	((val >> 22) & 0xfff)
 #define GET_REG_SAMPLL_CLK2(val)	((val >> 12) & 0xfff)
+#define GET_REG_SAMPLL_MON(val)		(0x10 + GET_REG_SAMPLL_STBY(val))
+
+/* CPG_PLL_{STBY,MON} bitfield only for RZ/V2{H,N} */
+#define CPG_PLL_STBY_SSCG_EN_WEN	BIT(18)
+#define CPG_PLL_STBY_RESETB_WEN		BIT(16)
+#define CPG_PLL_STBY_SSCG_EN		BIT(2)
+#define CPG_PLL_STBY_RESETB		BIT(0)
+#define CPG_PLL_MON_LOCK		BIT(4)
+#define CPG_PLL_MON_RESETB		BIT(0)
+
 
 struct sd_hw_data {
 	struct clk_hw hw;
@@ -477,6 +488,27 @@ rzg2l_cpg_pll_clk_register(const struct cpg_core_clk *core,
 	struct clk_init_data init;
 	const char *parent_name;
 	struct pll_clk *pll_clk;
+	int val, ret;
+
+	/* Put PLL in normal mode if it is in standby mode*/
+	val = readl(priv->base + GET_REG_SAMPLL_MON(core->conf));
+	if (val != (CPG_PLL_MON_LOCK | CPG_PLL_MON_RESETB)) {
+		/* Put PLL to normal mode */
+		writel(CPG_PLL_STBY_RESETB_WEN | CPG_PLL_STBY_RESETB,
+		       priv->base + GET_REG_SAMPLL_STBY(core->conf));
+
+		/* PLL normal mode transition, output clock stability check */
+		ret = readl_poll_timeout(priv->base +
+					 GET_REG_SAMPLL_MON(core->conf),
+					 val, (val & CPG_PLL_MON_LOCK),
+					 100, 250000);
+		if (ret) {
+			dev_err(priv->dev,
+				"failed to put %s PLL clock to normal mode",
+				core->name);
+			return ERR_PTR(ret);
+		}
+	}
 
 	parent = clks[core->parent & 0xffff];
 	if (IS_ERR(parent))
