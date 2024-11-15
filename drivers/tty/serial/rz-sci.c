@@ -338,12 +338,11 @@ static void sci_start_tx(struct uart_port *port)
 
 	/* DMA need TIE enable */
 	ctrl = serial_port_in(port, CCR0);
-	if (sp->chan_tx)
+	if (sp->chan_tx) {
 		new = ctrl | CCR0_TIE;
-	else
-		new = ctrl & ~CCR0_TIE;
-	if (new != ctrl)
-		serial_port_out(port, CCR0, new);
+		if (new != ctrl)
+			serial_port_out(port, CCR0, new);
+	}
 #endif
 
 	if (!sp->chan_tx) {
