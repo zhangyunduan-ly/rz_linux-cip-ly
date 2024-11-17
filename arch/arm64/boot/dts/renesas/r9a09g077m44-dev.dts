@@ -35,10 +35,10 @@
 
 /*
  * Set SEL_ETHSW_LCDC to below values to select using of:
- * - 0: ETHSW
- * - 1: LCDC (default)
+ * - 0: ETHSW (default)
+ * - 1: LCDC
  */
-#define SEL_ETHSW_LCDC		1
+#define SEL_ETHSW_LCDC		0
 
 /*
  * Set SEL_ETHSS_PCIE to below values to select using of:
@@ -183,6 +183,7 @@
 		states = <3300000 0 1800000 1>;
 	};
 
+#if (SEL_ETHSW_LCDC)
 	hdmi-out {
 		compatible = "hdmi-connector";
 		type = "d";
@@ -193,6 +194,7 @@
 			};
 		};
 	};
+#endif
 };
 
 &pinctrl {
@@ -673,6 +675,7 @@
 
 	status = "okay";
 
+#if (SEL_ETHSW_LCDC)
 	adv7513: adv7513@39 {
 		compatible = "adi,adv7513";
 		reg = <0x39>;
@@ -708,6 +711,7 @@
 			};
 		};
 	};
+#endif
 };
 
 &wdt2 {
