@@ -340,14 +340,15 @@
 	adc2_pins: adc2 {
 		pinmux = <RZT2H_PORT_PINMUX(34, 6, 0x1f)>; /* ADCTRG2# */
 	};
-#else
+#endif
 	pins_refclk: pins_refclk {
 		pinmux = <RZT2H_PORT_PINMUX(21, 7, 0x02)>,	/* ETH0_REFCLK */
 			 <RZT2H_PORT_PINMUX(26, 4, 0x02)>,	/* ETH1_REFCLK */
-			 <RZT2H_PORT_PINMUX(31, 0, 0x02)>,	/* ETH2_REFCLK */
-			 <RZT2H_PORT_PINMUX(34, 6, 0x02)>;	/* ETH3_REFCLK */
-	};
+#if (!SEL_ADC)
+			 <RZT2H_PORT_PINMUX(34, 6, 0x02)>,	/* ETH3_REFCLK */
 #endif
+			 <RZT2H_PORT_PINMUX(31, 0, 0x02)>;	/* ETH2_REFCLK */
+	};
 
 	eth0_pins: ethss_0 {
 		pinmux = <RZT2H_PORT_PINMUX(20, 0, 0x0F)>,	/* ETH0_TXCLK */
@@ -781,6 +782,7 @@
 	};
 };
 
+#if (!SEL_PCIE && !SEL_SPI2 && !SEL_ADC)
 &gmac1 {
 	phy-handle = <&phy3>;
 	phy-mode = "rgmii-id";
@@ -803,6 +805,7 @@
 		};
 	};
 };
+#endif
 
 &gmac2 {
 	phy-handle = <&phy2>;
@@ -827,14 +830,16 @@
 	};
 };
 
-#if (!SPI2_SEL && !SEL_ADC && !SEL_PCIE)
 &ethss {
 	status = "okay";
 	pinctrl-names = "default";
+#if (SEL_PCIE || SPI2_SEL || SEL_ADC)
+	pinctrl-0 = <&pins_refclk>, <&eth0_pins>, <&eth1_pins>, <&eth2_pins>;
+#else
 	pinctrl-0 = <&pins_refclk>, <&eth0_pins>, <&eth1_pins>, <&eth2_pins>, <&eth3_pins>;
+#endif
 	renesas,ethss-switch-portmanagement = <ETHSS_GMAC0_PORT>;
 };
-#endif
 
 #if (!SEL_ETHSW_LCDC)
 &ethsw {
