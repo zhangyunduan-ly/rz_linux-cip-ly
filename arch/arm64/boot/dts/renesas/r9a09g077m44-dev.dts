@@ -745,6 +745,7 @@
 	};
 };
 
+#if (SEL_ETHSS_PCIE)
 &gmac1 {
 	phy-handle = <&phy3>;
 	phy-mode = "rgmii-id";
@@ -767,7 +768,9 @@
 		};
 	};
 };
+#endif
 
+#if (SEL_RSPI_ETHSS)
 &gmac2 {
 	phy-handle = <&phy2>;
 	phy-mode = "rgmii-id";
@@ -790,15 +793,22 @@
 		};
 	};
 };
+#endif
 
-#if (SEL_RSPI_ETHSS && SEL_ETHSS_PCIE)
 &ethss {
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pins_refclk>, <&eth0_pins>, <&eth1_pins>, <&eth2_pins>, <&eth3_pins>;
+	pinctrl-0 = <&pins_refclk>,
+		    <&eth1_pins>,
+#if (SEL_RSPI_ETHSS)
+		    <&eth2_pins>,
+#endif
+#if (SEL_ETHSS_PCIE)
+		    <&eth3_pins>,
+#endif
+		    <&eth0_pins>;
 	renesas,ethss-switch-portmanagement = <ETHSS_GMAC0_PORT>;
 };
-#endif
 
 #if (!SEL_ETHSS_PCIE)
 &pcie0 {
