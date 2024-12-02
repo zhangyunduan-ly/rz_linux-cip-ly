@@ -475,7 +475,28 @@ rzv2h_cpg_pll_clk_register(const struct cpg_core_clk *core,
 	const struct clk *parent;
 	const char *parent_name;
 	struct pll_clk *pll_clk;
-	int ret;
+	int val, ret;
+
+	/* Put PLL in normal mode if it is in standby mode*/
+	val = readl(priv->base + PLL_MON_OFFSET(core->cfg.conf));
+	if (val != (RZV2H_CPG_PLL_MON_LOCK | RZV2H_CPG_PLL_MON_RESETB)) {
+		/* Put PLL to normal mode */
+		writel(RZV2H_CPG_PLL_STBY_RESETB |
+		       RZV2H_CPG_PLL_STBY_RESETB_WEN,
+		       priv->base + PLL_STBY_OFFSET(core->cfg.conf));
+
+		/* PLL normal mode transition, output clock stability check */
+		ret = readl_poll_timeout(priv->base +
+					 PLL_MON_OFFSET(core->cfg.conf),
+					 val, (val & RZV2H_CPG_PLL_MON_LOCK),
+					 100, 250000);
+		if (ret) {
+			dev_err(priv->dev,
+				"failed to put %s PLL clock to normal mode",
+				core->name);
+			return ERR_PTR(ret);
+		}
+	}
 
 	parent = priv->clks[core->parent];
 	if (IS_ERR(parent))
