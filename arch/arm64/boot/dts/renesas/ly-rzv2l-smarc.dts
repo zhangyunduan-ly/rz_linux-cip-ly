@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2021 Renesas Electronics Corp.
  */
-#include "r9a07g054.dtsi"
+#include "r9a07g054l2.dtsi"
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/pinctrl/rzg2l-pinctrl.h>
@@ -17,24 +17,24 @@
 		ethernet0 = &eth0;
 		ethernet1 = &eth1;
 
-        serial0 = &scif0;
-        serial1 = &scif1;
-        serial2 = &scif2;
-        serial3 = &scif3;
-        serial4 = &scif4;
-        serial5 = &sci0;
-        serial6 = &sci1;
+		serial0 = &scif0;
+		serial1 = &scif1;
+		serial2 = &scif2;
+		serial3 = &scif3;
+		serial4 = &scif4;
+		serial5 = &sci0;
+		serial6 = &sci1;
 
 		i2c0 = &i2c0;
 		i2c1 = &i2c1;
-        i2c2 = &i2c2;
-        i2c3 = &i2c3;
+		i2c2 = &i2c2;
+		i2c3 = &i2c3;
 
 		mmc0 = &sdhi0;
 
-        rspi0 = &spi0;
-        rspi1 = &spi1;
-        rspi2 = &spi2;
+		rspi0 = &spi0;
+		rspi1 = &spi1;
+		rspi2 = &spi2;
 	};
 
 	memory@48000000 {
