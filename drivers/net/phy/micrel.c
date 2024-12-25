@@ -86,6 +86,8 @@ static struct kszphy_hw_stat kszphy_hw_stats[] = {
 
 struct kszphy_type {
 	u32 led_mode_reg;
+	u32 led_mode_reg0;
+	u32 led_mode_reg1;
 	u16 interrupt_level_mask;
 	bool has_broadcast_disable;
 	bool has_nand_tree_disable;
@@ -131,6 +133,13 @@ static const struct kszphy_type ksz9021_type = {
 	.interrupt_level_mask	= BIT(14),
 };
 
+static const struct kszphy_type ksz9131_type = {
+	.led_mode_reg		= 1,
+	.led_mode_reg0		= 0x40C0,
+	.led_mode_reg1		= 0x40C3,
+	.interrupt_level_mask	= BIT(14),
+};
+
 static int kszphy_extended_write(struct phy_device *phydev,
 				u32 regnum, u16 val)
 {
@@ -143,6 +152,20 @@ static int kszphy_extended_read(struct phy_device *phydev,
 {
 	phy_write(phydev, MII_KSZPHY_EXTREG, regnum);
 	return phy_read(phydev, MII_KSZPHY_EXTREG_READ);
+}
+
+static int yt8251phy_extended_write(struct phy_device *phydev,
+				u32 regnum, u16 val)
+{
+	phy_write(phydev, MII_KSZPHY_CTRL_1, regnum);
+	return phy_write(phydev, MII_KSZPHY_CTRL_2, val);
+}
+
+static int yt8251kszphy_extended_read(struct phy_device *phydev,
+				u32 regnum)
+{
+	phy_write(phydev, MII_KSZPHY_CTRL_1, regnum);
+	return phy_read(phydev, MII_KSZPHY_CTRL_2);
 }
 
 static int kszphy_ack_interrupt(struct phy_device *phydev)
@@ -229,6 +252,27 @@ out:
 	return rc;
 }
 
+static int yt8512phy_setup_led(struct phy_device *phydev, u32 reg)
+{
+	int rc, temp;
+	temp = yt8251kszphy_extended_read(phydev, reg);
+	if (temp < 0) {
+		rc = temp;
+		goto out;
+	}
+	if(reg==0x40C0){
+		temp = 0x30;
+	}else{
+		temp = 0x1300;
+	}
+	rc = yt8251phy_extended_write(phydev, reg, temp);
+out:
+	if (rc < 0)
+		phydev_err(phydev, "failed to set led mode\n");
+
+	return rc;
+}
+
 /* Disable PHY address 0 as the broadcast address, so that it can be used as a
  * unique (non-broadcast) address on a shared bus.
  */
@@ -283,8 +327,13 @@ static int kszphy_config_reset(struct phy_device *phydev)
 		}
 	}
 
-	if (priv->type && priv->led_mode >= 0)
+	if (priv->type && priv->led_mode == 2) {
 		kszphy_setup_led(phydev, priv->type->led_mode_reg, priv->led_mode);
+	}
+	if (priv->type && priv->led_mode == 1){
+		yt8512phy_setup_led(phydev, priv->type->led_mode_reg0);
+		yt8512phy_setup_led(phydev, priv->type->led_mode_reg1);
+	}
 
 	return 0;
 }
@@ -1137,7 +1186,7 @@ static int kszphy_probe(struct phy_device *phydev)
 	priv->type = type;
 
 	if (type && type->led_mode_reg) {
-		ret = of_property_read_u32(np, "micrel,led-mode",
+		ret = of_property_read_u32(np, "led-mode",
 				&priv->led_mode);
 		if (ret)
 			priv->led_mode = -1;
@@ -1367,7 +1416,7 @@ static struct phy_driver ksphy_driver[] = {
 	.phy_id_mask	= MICREL_PHY_ID_MASK,
 	.name		= "Microchip KSZ9131 Gigabit PHY",
 	/* PHY_GBIT_FEATURES */
-	.driver_data	= &ksz9021_type,
+	.driver_data	= &ksz9131_type,
 	.probe		= kszphy_probe,
 	.config_init	= ksz9131_config_init,
 	.read_status	= genphy_read_status,

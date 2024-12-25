@@ -160,6 +160,9 @@ struct sci_port {
 
 	bool has_rtscts;
 	bool autorts;
+
+	bool rs485_enabled;
+	struct gpio_desc *rs485_dir_gpio;
 };
 
 #define SCI_NPORTS CONFIG_SERIAL_SH_SCI_NR_UARTS
@@ -573,10 +576,30 @@ static inline unsigned long port_rx_irq_mask(struct uart_port *port)
 	return SCSCR_RIE | (to_sci_port(port)->cfg->scscr & SCSCR_REIE);
 }
 
+static void sci_rs485_set_tx_mode(struct uart_port *port)
+{
+	struct sci_port *s = to_sci_port(port);
+
+	if (s->rs485_enabled && s->rs485_dir_gpio) {
+		gpiod_set_value(s->rs485_dir_gpio, 1);
+	}
+}
+
+static void sci_rs485_set_rx_mode(struct uart_port *port)
+{
+	struct sci_port *s = to_sci_port(port);
+
+	if (s->rs485_enabled && s->rs485_dir_gpio) {
+		gpiod_set_value(s->rs485_dir_gpio, 0);
+	}
+}
+
 static void sci_start_tx(struct uart_port *port)
 {
 	struct sci_port *s = to_sci_port(port);
 	unsigned short ctrl;
+
+	sci_rs485_set_tx_mode(port);
 
 #ifdef CONFIG_SERIAL_SH_SCI_DMA
 	if (port->type == PORT_SCIFA || port->type == PORT_SCIFB) {
@@ -827,6 +850,7 @@ static void sci_transmit_chars(struct uart_port *port)
 	unsigned short status;
 	unsigned short ctrl;
 	int count;
+	struct sci_port *s = to_sci_port(port);
 
 	status = serial_port_in(port, SCxSR);
 	if (!(status & SCxSR_TDxE(port))) {
@@ -874,6 +898,14 @@ static void sci_transmit_chars(struct uart_port *port)
 			ctrl &= ~SCSCR_TIE;
 			ctrl |= SCSCR_TEIE;
 			serial_port_out(port, SCSCR, ctrl);
+		} else {
+			if (s->rs485_enabled) {
+				ctrl = serial_port_in(port, SCSCR);
+				ctrl &= ~SCSCR_TIE;
+				ctrl |= SCSCR_TEIE;
+				serial_port_out(port, SCSCR, ctrl);
+				return;
+			}
 		}
 
 		sci_stop_tx(port);
@@ -929,11 +961,11 @@ static void sci_receive_chars(struct uart_port *port)
 				if (status & SCxSR_FER(port)) {
 					flag = TTY_FRAME;
 					port->icount.frame++;
-					dev_notice(port->dev, "frame error\n");
+					// dev_notice(port->dev, "frame error\n");
 				} else if (status & SCxSR_PER(port)) {
 					flag = TTY_PARITY;
 					port->icount.parity++;
-					dev_notice(port->dev, "parity error\n");
+					// dev_notice(port->dev, "parity error\n");
 				} else
 					flag = TTY_NORMAL;
 
@@ -971,30 +1003,30 @@ static int sci_handle_errors(struct uart_port *port)
 		port->icount.overrun++;
 
 		/* overrun error */
-		if (tty_insert_flip_char(tport, 0, TTY_OVERRUN))
-			copied++;
+		// if (tty_insert_flip_char(tport, 0, TTY_OVERRUN))
+		// 	copied++;
 
-		dev_notice(port->dev, "overrun error\n");
+		// dev_notice(port->dev, "overrun error\n");
 	}
 
 	if (status & SCxSR_FER(port)) {
 		/* frame error */
 		port->icount.frame++;
 
-		if (tty_insert_flip_char(tport, 0, TTY_FRAME))
-			copied++;
+		// if (tty_insert_flip_char(tport, 0, TTY_FRAME))
+		// 	copied++;
 
-		dev_notice(port->dev, "frame error\n");
+		// dev_notice(port->dev, "frame error\n");
 	}
 
 	if (status & SCxSR_PER(port)) {
 		/* parity error */
 		port->icount.parity++;
 
-		if (tty_insert_flip_char(tport, 0, TTY_PARITY))
-			copied++;
+		// if (tty_insert_flip_char(tport, 0, TTY_PARITY))
+		// 	copied++;
 
-		dev_notice(port->dev, "parity error\n");
+		// dev_notice(port->dev, "parity error\n");
 	}
 
 	if (copied)
@@ -1022,11 +1054,11 @@ static int sci_handle_fifo_overrun(struct uart_port *port)
 
 		port->icount.overrun++;
 
-		tty_insert_flip_char(tport, 0, TTY_OVERRUN);
-		tty_flip_buffer_push(tport);
+		// tty_insert_flip_char(tport, 0, TTY_OVERRUN);
+		// tty_flip_buffer_push(tport);
 
-		dev_dbg(port->dev, "overrun error\n");
-		copied++;
+		// dev_dbg(port->dev, "overrun error\n");
+		// copied++;
 	}
 
 	return copied;
@@ -1045,8 +1077,8 @@ static int sci_handle_breaks(struct uart_port *port)
 		port->icount.brk++;
 
 		/* Notify of BREAK */
-		if (tty_insert_flip_char(tport, 0, TTY_BREAK))
-			copied++;
+		// if (tty_insert_flip_char(tport, 0, TTY_BREAK))
+		// 	copied++;
 
 		dev_dbg(port->dev, "BREAK detected\n");
 	}
@@ -1239,14 +1271,23 @@ static void sci_dma_tx_complete(void *arg)
 		schedule_work(&s->work_tx);
 	} else {
 		s->cookie_tx = -EINVAL;
-		if (port->type == PORT_SCIFA || port->type == PORT_SCIFB ||
-		    s->cfg->regtype == SCIx_RZ_SCIFA_REGTYPE) {
+		if (s->rs485_enabled) {
 			u16 ctrl = serial_port_in(port, SCSCR);
 			serial_port_out(port, SCSCR, ctrl & ~SCSCR_TIE);
-			if (s->cfg->regtype == SCIx_RZ_SCIFA_REGTYPE) {
-				/* Switch irq from DMA to SCIF */
-				dmaengine_pause(s->chan_tx_saved);
-				enable_irq(s->irqs[SCIx_TXI_IRQ]);
+			/* Switch irq from DMA to SCIF */
+			dmaengine_pause(s->chan_tx_saved);
+			enable_irq(s->irqs[SCIx_TXI_IRQ]);
+			serial_port_out(port, SCSCR, ctrl | SCSCR_TEIE);
+		} else {
+			if (port->type == PORT_SCIFA || port->type == PORT_SCIFB ||
+				s->cfg->regtype == SCIx_RZ_SCIFA_REGTYPE) {
+				u16 ctrl = serial_port_in(port, SCSCR);
+				serial_port_out(port, SCSCR, ctrl & ~SCSCR_TIE);
+				if (s->cfg->regtype == SCIx_RZ_SCIFA_REGTYPE) {
+					/* Switch irq from DMA to SCIF */
+					dmaengine_pause(s->chan_tx_saved);
+					enable_irq(s->irqs[SCIx_TXI_IRQ]);
+				}
 			}
 		}
 	}
@@ -1736,6 +1777,23 @@ static irqreturn_t sci_rx_interrupt(int irq, void *ptr)
 {
 	struct uart_port *port = ptr;
 	struct sci_port *s = to_sci_port(port);
+
+	if (s->rs485_enabled) {
+		unsigned long flags;
+		u16 scr = serial_port_in(port, SCSCR);
+		u16 ssr = serial_port_in(port, SCxSR);
+		if (scr & SCSCR_TEIE) {
+			if (ssr & SCIF_TEND) {
+				spin_lock_irqsave(&port->lock, flags);
+				scr = serial_port_in(port, SCSCR);
+				scr &= ~(SCSCR_TEIE);
+				serial_port_out(port, SCSCR, scr);
+				spin_unlock_irqrestore(&port->lock, flags);
+				sci_rs485_set_rx_mode(port);
+				return IRQ_HANDLED;
+			}
+		}
+	}
 
 #ifdef CONFIG_SERIAL_SH_SCI_DMA
 	if (s->chan_rx) {
@@ -2742,8 +2800,8 @@ done:
 	s->rx_frame = (10000 * bits) / (baud / 100);
 #ifdef CONFIG_SERIAL_SH_SCI_DMA
 	s->rx_timeout = s->buf_len_rx * 2 * s->rx_frame;
-	if (s->rx_timeout < 20)
-		s->rx_timeout = 20;
+	if (s->rx_timeout < 20000)
+		s->rx_timeout = 20000;
 #endif
 
 	if ((termios->c_cflag & CREAD) != 0)
@@ -3420,6 +3478,17 @@ static struct plat_sci_port *sci_parse_dt(struct platform_device *pdev,
 
 	sp->has_rtscts = of_property_read_bool(np, "uart-has-rtscts");
 	sp->rstc = rstc;
+
+	if (of_property_read_bool(np, "rs485-enabled")) {
+		sp->rs485_enabled = true;
+		sp->rs485_dir_gpio = devm_gpiod_get_optional(&pdev->dev, "rs485", GPIOD_OUT_LOW);
+		if (IS_ERR(sp->rs485_dir_gpio)) {
+			return ERR_PTR(dev_err_probe(&pdev->dev, PTR_ERR(sp->rs485_dir_gpio), 
+							"failed to get rs485 direction\n"));
+		}
+	} else {
+		sp->rs485_enabled = false;
+	}
 
 	return p;
 }
