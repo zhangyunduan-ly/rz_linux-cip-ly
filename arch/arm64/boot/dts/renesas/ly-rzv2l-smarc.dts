@@ -174,18 +174,18 @@
 	pinctrl-0 = <&eth1_pins>;
 	pinctrl-names = "default";
 	phy-handle = <&phy1>;
-	phy-mode = "mii";
+	phy-mode = "rgmii-id";
 	status = "okay";
 
-	phy1: ethernet-phy@3 {
-		compatible = "ethernet-phy-id0022.1640",
+	phy1: ethernet-phy@1 {
+		compatible = "ethernet-phy-id4f51.e91b",
 			     "ethernet-phy-ieee802.3-c22";
-		reg = <3>;
+		reg = <1>;
 		led-mode = <1>;
-		rxc-skew-psec = <2400>;
-		txc-skew-psec = <2400>;
+		rxc-skew-psec = <0>;
+		txc-skew-psec = <1800>;
 		rxdv-skew-psec = <0>;
-		txdv-skew-psec = <0>;
+		txen-skew-psec = <0>;
 		rxd0-skew-psec = <0>;
 		rxd1-skew-psec = <0>;
 		rxd2-skew-psec = <0>;
@@ -194,6 +194,9 @@
 		txd1-skew-psec = <0>;
 		txd2-skew-psec = <0>;
 		txd3-skew-psec = <0>;
+
+		interrupt-parent = <&pinctrl>;
+		interrupts = <RZG2L_GPIO(16, 0) IRQ_TYPE_LEVEL_LOW>;
 	};
 };
 
@@ -242,24 +245,29 @@
 	};
 
 	eth1_pins: eth1 {
-		pinmux = <RZG2L_PORT_PINMUX(37, 0, 1)>, /* ET1_MDC */
-			 <RZG2L_PORT_PINMUX(37, 1, 1)>, /* ET1_MDIO */
-			 <RZG2L_PORT_PINMUX(29, 0, 1)>, /* ET1_TXC */
-			 <RZG2L_PORT_PINMUX(29, 1, 1)>, /* ET1_TX_CTL */
-			 <RZG2L_PORT_PINMUX(30, 0, 1)>, /* ET1_TXD0 */
-			 <RZG2L_PORT_PINMUX(30, 1, 1)>, /* ET1_TXD1 */
-			 <RZG2L_PORT_PINMUX(31, 0, 1)>, /* ET1_TXD2 */
-			 <RZG2L_PORT_PINMUX(31, 1, 1)>, /* ET1_TXD3 */
-			 <RZG2L_PORT_PINMUX(32, 0, 1)>, /* ETH1_TX_ERR */
-			 <RZG2L_PORT_PINMUX(32, 1, 1)>, /* ETH1_TX_COL */
-			 <RZG2L_PORT_PINMUX(33, 0, 1)>, /* ETH1_TX_CRS */
-			 <RZG2L_PORT_PINMUX(33, 1, 1)>, /* ET1_RXC */
-			 <RZG2L_PORT_PINMUX(34, 0, 1)>, /* ET1_RX_CTL */
-			 <RZG2L_PORT_PINMUX(34, 1, 1)>, /* ET1_RXD0 */
-			 <RZG2L_PORT_PINMUX(35, 0, 1)>, /* ET1_RXD1 */
-			 <RZG2L_PORT_PINMUX(35, 1, 1)>, /* ET1_RXD2 */
-			 <RZG2L_PORT_PINMUX(36, 0, 1)>, /* ET1_RXD3 */
-			 <RZG2L_PORT_PINMUX(36, 1, 1)>; /* ETH1_RX_ERR */
+		txc {
+			pinmux = <RZG2L_PORT_PINMUX(29, 0, 1)>; /* ET1_TXC */
+			power-source = <3300>;
+			output-enable;
+		};
+
+		mux {
+			pinmux = <RZG2L_PORT_PINMUX(37, 2, 1)>, /* ET1_LINKSTA */
+				 <RZG2L_PORT_PINMUX(37, 0, 1)>, /* ET1_MDC */
+				 <RZG2L_PORT_PINMUX(37, 1, 1)>, /* ET1_MDIO */
+				 <RZG2L_PORT_PINMUX(29, 1, 1)>, /* ET1_TX_CTL */
+				 <RZG2L_PORT_PINMUX(30, 0, 1)>, /* ET1_TXD0 */
+				 <RZG2L_PORT_PINMUX(30, 1, 1)>, /* ET1_TXD1 */
+				 <RZG2L_PORT_PINMUX(31, 0, 1)>, /* ET1_TXD2 */
+				 <RZG2L_PORT_PINMUX(31, 1, 1)>, /* ET1_TXD3 */
+				 <RZG2L_PORT_PINMUX(33, 1, 1)>, /* ET1_RXC */
+				 <RZG2L_PORT_PINMUX(34, 0, 1)>, /* ET1_RX_CTL */
+				 <RZG2L_PORT_PINMUX(34, 1, 1)>, /* ET1_RXD0 */
+				 <RZG2L_PORT_PINMUX(35, 0, 1)>, /* ET1_RXD1 */
+				 <RZG2L_PORT_PINMUX(35, 1, 1)>, /* ET1_RXD2 */
+				 <RZG2L_PORT_PINMUX(36, 0, 1)>; /* ET1_RXD3 */
+			power-source = <3300>;
+		};
 	};
 
 	qspi0_pins: qspi0 {
@@ -370,8 +378,7 @@
 
 	usb0_pins: usb0 {
 		pinmux = <RZG2L_PORT_PINMUX(4, 0, 1)>, /* VBUS */
-			 <RZG2L_PORT_PINMUX(5, 0, 1)>, /* OVC */
-			 <RZG2L_PORT_PINMUX(5, 1, 1)>; /* OTG_ID */
+			 <RZG2L_PORT_PINMUX(5, 0, 1)>; /* OVC */
 	};
 
 	usb1_pins: usb1 {
@@ -483,6 +490,8 @@
 &scif3 {
 	pinctrl-0 = <&scif3_pins>;
 	pinctrl-names = "default";
+	rs485-enabled;
+	rs485-gpios = <&pinctrl RZG2L_GPIO(1, 1) GPIO_ACTIVE_HIGH>;
 	status = "okay";
 };
 
@@ -527,8 +536,9 @@
 &spi0 {
 	pinctrl-0 = <&spi0_pins>;
 	pinctrl-names = "default";
+	spi-slave;
 	status = "okay";
-	spidev@0 {
+	slave {
 		compatible = "rohm,dh2228fv";
 		reg = <0>;
 		spi-max-frequency = <50000000>;
@@ -540,8 +550,9 @@
 &spi1 {
 	pinctrl-0 = <&spi1_pins>;
 	pinctrl-names = "default";
+	spi-slave;
 	status = "okay";
-	spi1dev@0 {
+	slave {
 		compatible = "rohm,dh2228fv";
 		reg = <0>;
 		spi-max-frequency = <50000000>;
@@ -567,7 +578,7 @@
 	pinctrl-0 = <&usb0_pins>;
 	pinctrl-names = "default";
 
-	vbus-supply = <&usb0_vbus_otg>;
+	// vbus-supply = <&usb0_vbus_otg>;
 	status = "okay";
 };
 
