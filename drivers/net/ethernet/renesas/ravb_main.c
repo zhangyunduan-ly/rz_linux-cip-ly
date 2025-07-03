@@ -511,47 +511,9 @@ error:
 	return -ENOMEM;
 }
 
-static void ravb_csum_offload_init_gbeth(struct net_device *ndev)
-{
-	bool tx_enable = ndev->features & NETIF_F_HW_CSUM;
-	bool rx_enable = ndev->features & NETIF_F_RXCSUM;
-	u32 csr0;
-
-	if (!(tx_enable || rx_enable))
-		return;
-
-	csr0 = ravb_read(ndev, CSR0);
-	ravb_write(ndev, csr0 & ~(CSR0_RPE | CSR0_TPE), CSR0);
-	if (ravb_wait(ndev, CSR0, CSR0_RPE | CSR0_TPE, 0)) {
-		netdev_err(ndev, "Timeout Enabling HW CSUM failed\n");
-
-		if (tx_enable)
-			ndev->features &= ~NETIF_F_HW_CSUM;
-		if (rx_enable)
-			ndev->features &= ~NETIF_F_RXCSUM;
-	} else {
-		if (tx_enable)
-			ravb_write(ndev, CSR1_ALL, CSR1);
-
-		if (rx_enable)
-			ravb_write(ndev, CSR2_ALL, CSR2);
-	}
-
-	ravb_write(ndev, csr0, CSR0);
-}
-
 static void ravb_emac_init_gbeth(struct net_device *ndev)
 {
 	struct ravb_private *priv = netdev_priv(ndev);
-
-	if (priv->phy_interface == PHY_INTERFACE_MODE_MII) {
-		ravb_write(ndev, (1000 << 16) | CXR35_SEL_XMII_MII, CXR35);
-		ravb_modify(ndev, CXR31, CXR31_SEL_LINK0 | CXR31_SEL_LINK1, 0);
-	} else {
-		ravb_write(ndev, (1000 << 16) | CXR35_SEL_XMII_RGMII, CXR35);
-		ravb_modify(ndev, CXR31, CXR31_SEL_LINK0 | CXR31_SEL_LINK1,
-			    CXR31_SEL_LINK0);
-	}
 
 	/* Receive frame limit set register */
 	ravb_write(ndev, GBETH_RX_BUFF_MAX + ETH_FCS_LEN, RFLR);
@@ -561,7 +523,6 @@ static void ravb_emac_init_gbeth(struct net_device *ndev)
 			 ECMR_TE | ECMR_RE | ECMR_RCPT |
 			 ECMR_TXF | ECMR_RXF, ECMR);
 
-	ravb_csum_offload_init_gbeth(ndev);
 	ravb_set_rate_gbeth(ndev);
 
 	/* Set MAC address */
@@ -576,6 +537,12 @@ static void ravb_emac_init_gbeth(struct net_device *ndev)
 
 	/* E-MAC interrupt enable register */
 	ravb_write(ndev, ECSIPR_ICDIP | ECSIPR_LCHNGIP, ECSIPR);
+
+	if (priv->phy_interface == PHY_INTERFACE_MODE_RGMII_ID) {
+		ravb_modify(ndev, CXR31, CXR31_SEL_LINK0 | CXR31_SEL_LINK1, CXR31_SEL_LINK0);
+	} else {
+		ravb_write(ndev, ravb_read(ndev, CXR31) & ~CXR31_SEL_LINK0, CXR31);
+	}
 }
 
 static void ravb_emac_init_rcar(struct net_device *ndev)
@@ -755,32 +722,6 @@ static void ravb_get_tx_tstamp(struct net_device *ndev)
 	}
 }
 
-static void ravb_rx_csum_gbeth(struct sk_buff *skb)
-{
-	__wsum csum_ip_hdr, csum_proto;
-	u8 *hw_csum;
-
-	/* The hardware checksum status is contained in sizeof(__sum16) * 2 = 4
-	 * bytes appended to packet data. First 2 bytes is ip header csum and
-	 * last 2 bytes is protocol csum.
-	 */
-	if (unlikely(skb->len < sizeof(__sum16) * 2))
-		return;
-
-	hw_csum = skb_tail_pointer(skb) - sizeof(__sum16);
-	csum_proto = csum_unfold((__force __sum16)get_unaligned_le16(hw_csum));
-
-	hw_csum -= sizeof(__sum16);
-	csum_ip_hdr = csum_unfold((__force __sum16)get_unaligned_le16(hw_csum));
-	skb_trim(skb, skb->len - 2 * sizeof(__sum16));
-
-	/* TODO: IPV6 Rx csum */
-	if (skb->protocol == htons(ETH_P_IP) && csum_ip_hdr == TOE_RX_CSUM_OK &&
-	    csum_proto == TOE_RX_CSUM_OK)
-		/* Hardware validated our checksum */
-		skb->ip_summed = CHECKSUM_UNNECESSARY;
-}
-
 static void ravb_rx_csum(struct sk_buff *skb)
 {
 	u8 *hw_csum;
@@ -866,8 +807,6 @@ static bool ravb_rx_gbeth(struct net_device *ndev, int *quota, int q)
 				skb = ravb_get_skb_gbeth(ndev, entry, desc);
 				skb_put(skb, pkt_len);
 				skb->protocol = eth_type_trans(skb, ndev);
-				if (ndev->features & NETIF_F_RXCSUM)
-					ravb_rx_csum_gbeth(skb);
 				napi_gro_receive(&priv->napi[q], skb);
 				stats->rx_packets++;
 				stats->rx_bytes += pkt_len;
@@ -895,8 +834,6 @@ static bool ravb_rx_gbeth(struct net_device *ndev, int *quota, int q)
 				dev_kfree_skb(skb);
 				priv->rx_1st_skb->protocol =
 					eth_type_trans(priv->rx_1st_skb, ndev);
-				if (ndev->features & NETIF_F_RXCSUM)
-					ravb_rx_csum_gbeth(skb);
 				napi_gro_receive(&priv->napi[q],
 						 priv->rx_1st_skb);
 				stats->rx_packets++;
@@ -1504,6 +1441,14 @@ static int ravb_phy_init(struct net_device *ndev)
 
 	phy_attached_info(phydev);
 
+	if (priv->phy_interface == PHY_INTERFACE_MODE_RGMII_ID) {
+		ravb_write(ndev, ravb_read(ndev, CXR35) | CXR35_SEL_MODIN, CXR35);
+	} else if (priv->phy_interface == PHY_INTERFACE_MODE_RGMII) {
+		ravb_write(ndev, CXR35_RGMII_SELECT, CXR35);
+	} else if (priv->phy_interface == PHY_INTERFACE_MODE_MII) {
+		ravb_write(ndev, CXR35_MII_SELECT, CXR35);
+	}
+
 	return 0;
 
 err_phy_disconnect:
@@ -1872,12 +1817,12 @@ static int ravb_open(struct net_device *ndev)
 	if (info->gptp)
 		ravb_ptp_init(ndev, priv->pdev);
 
+	netif_tx_start_all_queues(ndev);
+
 	/* PHY control start */
 	error = ravb_phy_start(ndev);
 	if (error)
 		goto out_ptp_stop;
-
-	netif_tx_start_all_queues(ndev);
 
 	return 0;
 
@@ -1885,7 +1830,6 @@ out_ptp_stop:
 	/* Stop PTP Clock driver */
 	if (info->gptp)
 		ravb_ptp_stop(ndev);
-	ravb_stop_dma(ndev);
 out_free_irq_mgmta:
 	if (!info->multi_irqs)
 		goto out_free_irq;
@@ -1990,39 +1934,6 @@ out_unlock:
 	rtnl_unlock();
 }
 
-static bool ravb_is_tx_checksum_offload_gbeth_possible(struct sk_buff *skb)
-{
-	struct iphdr *ip = ip_hdr(skb);
-
-	/* TODO: Need to add support for VLAN tag 802.1Q */
-	if (skb_vlan_tag_present(skb))
-		return false;
-
-	/* TODO: Need to add HW checksum for IPV6 */
-	if (skb->protocol != htons(ETH_P_IP))
-		return false;
-
-	switch (ip->protocol) {
-	case IPPROTO_TCP:
-		break;
-	case IPPROTO_UDP:
-		/* If the checksum value in the UDP header field is “H’0000”,
-		 * TOE does not calculate checksum for UDP part of this frame
-		 * as it is optional function as per standards.
-		 */
-		if (udp_hdr(skb)->check == 0)
-			return false;
-		break;
-	/* TODO: Need to add HW checksum for ICMP */
-	case IPPROTO_ICMP:
-		fallthrough;
-	default:
-		return false;
-	}
-
-	return true;
-}
-
 /* Packet transmit function for Ethernet AVB */
 static netdev_tx_t ravb_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
@@ -2037,11 +1948,6 @@ static netdev_tx_t ravb_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	void *buffer;
 	u32 entry;
 	u32 len;
-
-	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-		if (!ravb_is_tx_checksum_offload_gbeth_possible(skb))
-			skb_checksum_help(skb);
-	}
 
 	spin_lock_irqsave(&priv->lock, flags);
 	if (priv->cur_tx[q] - priv->dirty_tx[q] > (priv->num_tx_ring[q] - 1) *
@@ -2430,39 +2336,8 @@ static void ravb_set_rx_csum(struct net_device *ndev, bool enable)
 static int ravb_set_features_gbeth(struct net_device *ndev,
 				   netdev_features_t features)
 {
-	netdev_features_t changed = ndev->features ^ features;
-	struct ravb_private *priv = netdev_priv(ndev);
-	unsigned long flags;
-	u32 csr0;
-	int ret;
-
-	spin_lock_irqsave(&priv->lock, flags);
-	csr0 = ravb_read(ndev, CSR0);
-	ravb_write(ndev, csr0 & ~(CSR0_RPE | CSR0_TPE), CSR0);
-	ret = ravb_wait(ndev, CSR0, CSR0_RPE | CSR0_TPE, 0);
-	if (ret)
-		goto err_wait;
-
-	if (changed & NETIF_F_RXCSUM) {
-		if (features & NETIF_F_RXCSUM)
-			ravb_write(ndev, CSR2_ALL, CSR2);
-		else
-			ravb_write(ndev, 0, CSR2);
-	}
-
-	if (changed & NETIF_F_HW_CSUM) {
-		if (features & NETIF_F_HW_CSUM)
-			ravb_write(ndev, CSR1_ALL, CSR1);
-		else
-			ravb_write(ndev, 0, CSR1);
-	}
-
-	ndev->features = features;
-err_wait:
-	ravb_write(ndev, csr0, CSR0);
-	spin_unlock_irqrestore(&priv->lock, flags);
-
-	return ret;
+	/* Place holder */
+	return 0;
 }
 
 static int ravb_set_features_rcar(struct net_device *ndev,
@@ -2632,8 +2507,6 @@ static const struct ravb_hw_info gbeth_hw_info = {
 	.emac_init = ravb_emac_init_gbeth,
 	.gstrings_stats = ravb_gstrings_stats_gbeth,
 	.gstrings_size = sizeof(ravb_gstrings_stats_gbeth),
-	.net_hw_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM,
-	.net_features = NETIF_F_RXCSUM | NETIF_F_HW_CSUM,
 	.stats_len = ARRAY_SIZE(ravb_gstrings_stats_gbeth),
 	.max_rx_len = ALIGN(GBETH_RX_BUFF_MAX, RAVB_ALIGN),
 	.tccr_mask = TCCR_TSRQ0,
@@ -2787,14 +2660,10 @@ static int ravb_probe(struct platform_device *pdev)
 	ndev->features = info->net_features;
 	ndev->hw_features = info->net_hw_features;
 
-	error = reset_control_deassert(rstc);
-	if (error)
-		goto out_free_netdev;
+	reset_control_deassert(rstc);
 
 	pm_runtime_enable(&pdev->dev);
-	error = pm_runtime_resume_and_get(&pdev->dev);
-	if (error < 0)
-		goto out_rpm_disable;
+	pm_runtime_get_sync(&pdev->dev);
 
 	if (info->multi_irqs) {
 		if (info->err_mgmt_irqs)
@@ -3019,12 +2888,10 @@ out_disable_gptp_clk:
 out_disable_refclk:
 	clk_disable_unprepare(priv->refclk);
 out_release:
+	free_netdev(ndev);
 	pm_runtime_put(&pdev->dev);
-out_rpm_disable:
 	pm_runtime_disable(&pdev->dev);
 	reset_control_assert(rstc);
-out_free_netdev:
-	free_netdev(ndev);
 	return error;
 }
 
@@ -3034,24 +2901,22 @@ static int ravb_remove(struct platform_device *pdev)
 	struct ravb_private *priv = netdev_priv(ndev);
 	const struct ravb_hw_info *info = priv->info;
 
-	unregister_netdev(ndev);
-	if (info->nc_queues)
-		netif_napi_del(&priv->napi[RAVB_NC]);
-	netif_napi_del(&priv->napi[RAVB_BE]);
-
-	ravb_mdio_release(priv);
-
 	/* Stop PTP Clock driver */
 	if (info->ccc_gac)
 		ravb_ptp_stop(ndev);
 
-	/* Set reset mode */
-	ravb_write(ndev, CCC_OPC_RESET, CCC);
-	dma_free_coherent(ndev->dev.parent, priv->desc_bat_size, priv->desc_bat,
-			  priv->desc_bat_dma);
-
 	clk_disable_unprepare(priv->gptp_clk);
 	clk_disable_unprepare(priv->refclk);
+
+	/* Set reset mode */
+	ravb_write(ndev, CCC_OPC_RESET, CCC);
+	unregister_netdev(ndev);
+	if (info->nc_queues)
+		netif_napi_del(&priv->napi[RAVB_NC]);
+	netif_napi_del(&priv->napi[RAVB_BE]);
+	ravb_mdio_release(priv);
+	dma_free_coherent(ndev->dev.parent, priv->desc_bat_size, priv->desc_bat,
+			  priv->desc_bat_dma);
 
 	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
@@ -3121,11 +2986,6 @@ static int __maybe_unused ravb_suspend(struct device *dev)
 	else
 		ret = ravb_close(ndev);
 
-	if (priv->rstc)
-		reset_control_assert(priv->rstc);
-
-	clk_disable_unprepare(priv->refclk);
-
 	return ret;
 }
 
@@ -3135,14 +2995,6 @@ static int __maybe_unused ravb_resume(struct device *dev)
 	struct ravb_private *priv = netdev_priv(ndev);
 	const struct ravb_hw_info *info = priv->info;
 	int ret = 0;
-
-	if (priv->rstc) {
-		ret = reset_control_deassert(priv->rstc);
-		if (ret)
-			return ret;
-	}
-
-	clk_prepare_enable(priv->refclk);
 
 	/* If WoL is enabled set reset mode to rearm the WoL logic */
 	if (priv->wol_enabled)

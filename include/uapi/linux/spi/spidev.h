@@ -146,6 +146,15 @@ struct spi_ioc_transfer {
 #define SPI_IOC_RD_MODE32		_IOR(SPI_IOC_MAGIC, 5, __u32)
 #define SPI_IOC_WR_MODE32		_IOW(SPI_IOC_MAGIC, 5, __u32)
 
+/* Read / Write SPI device RX Data packet length */
+#define SPI_IOC_RD_LEN		_IOR(SPI_IOC_MAGIC, 6, __u32)
+#define SPI_IOC_WR_LEN		_IOW(SPI_IOC_MAGIC, 6, __u32)
+
+/* Read / Write SPI device RX Enable */
+#define SPI_IOC_SLAVE_RX_ENABLE		_IOR(SPI_IOC_MAGIC, 7, __u32)
+#define SPI_IOC_SLAVE_RX_DISABLE		_IOW(SPI_IOC_MAGIC, 7, __u32)
+
+#define SPI_IOC_SLAVE_RX_TEST		_IOR(SPI_IOC_MAGIC, 8, __u32)
 
 
 #endif /* SPIDEV_H */

@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Linyang devices
+#
+
+config LY_CHAR
+	tristate "linyang char"
+	depends on ARCH_RENESAS
+	help
+	   linyang char
+
+if LY_CHAR
+
+config LY_EARLY_WATCHDOG
+	tristate "linyang early watchdog"
+	depends on ARCH_RENESAS
+        help
+           linyang early watchdog
+
+config LY_ST75161
+	tristate "linyang st75161"
+	depends on ARCH_RENESAS
+        help
+           linyang st75161
+
+config LY_POWER
+	tristate "linyang power"
+	depends on ARCH_RENESAS
+        help
+           linyang power
+
+config LY_WATCHDOG
+	tristate "linyang watchdog"
+	depends on ARCH_RENESAS
+        help
+           linyang watchdog
+
+config LY_HT7132
+	tristate "linyang ht7132"
+	depends on ARCH_RENESAS
+        help
+           linyang ht7132
+
+endif # if LY_CHAR
