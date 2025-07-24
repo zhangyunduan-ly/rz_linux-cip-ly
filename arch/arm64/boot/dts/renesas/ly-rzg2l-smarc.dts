@@ -43,8 +43,12 @@
 
 	firmware {
 		optee {
-			compatible = "linaro,optee-tz";
-			method = "smc";
+			status = "okay";
+		};
+	};
+
+	thermal-zones {
+		emergency {
 			status = "okay";
 		};
 	};
@@ -264,11 +268,6 @@
 		feed-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
-
-	ly_ht7132 {
-		compatible = "ly-ht7132";
-		status = "okay";
-	};
 };
 
 &adc {
@@ -345,11 +344,11 @@
 };
 
 &ostm1 {
-	status = "okay";
+	status = "disabled";
 };
 
 &ostm2 {
-	status = "okay";
+	status = "disabled";
 };
 
 &pinctrl {
@@ -523,14 +522,14 @@
 &canfd {
 	pinctrl-0 = <&can0_pins &can1_pins>;
 	pinctrl-names = "default";
-	status = "okay";
+	status = "disabled";
 
 	channel0 {
-		status = "okay";
+		status = "disabled";
 	};
 
 	channel1 {
-		status = "okay";
+		status = "disabled";
 	};
 };
 
@@ -573,6 +572,7 @@
 
 &gpu {
 	mali-supply = <&reg_1p1v>;
+	status = "disabled";
 };
 
 &i2c0 {
@@ -729,9 +729,9 @@
 };
 
 &mtu3 {
-	status = "okay";
+	status = "disabled";
 };
 
 &cru {
-	status = "okay";
+	status = "disabled";
 };

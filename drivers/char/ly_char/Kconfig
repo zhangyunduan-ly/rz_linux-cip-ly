@@ -35,10 +35,4 @@ config LY_WATCHDOG
         help
            linyang watchdog
 
-config LY_HT7132
-	tristate "linyang ht7132"
-	depends on ARCH_RENESAS
-        help
-           linyang ht7132
-
 endif # if LY_CHAR
