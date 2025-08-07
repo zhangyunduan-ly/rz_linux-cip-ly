@@ -151,7 +151,7 @@
 		};
 
 		emled_comm {
-			gpios = <&pinctrl RZG2L_GPIO(1, 0) GPIO_ACTIVE_HIGH>;
+			gpios = <&pinctrl RZG2L_GPIO(45, 3) GPIO_ACTIVE_HIGH>;
 			label = "EMLED_COMM";
 			default-state = "off";
 			linux,default-trigger = "none";
@@ -266,6 +266,12 @@
 	ly_watchdog {
 		compatible = "ly-watchdog";
 		feed-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+	ly_gps {
+		compatible = "ly-gps";
+		pps-gpios = <&pinctrl RZG2L_GPIO(1, 0) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 };

@@ -35,4 +35,10 @@ config LY_WATCHDOG
         help
            linyang watchdog
 
+config LY_GPS
+	tristate "linyang gps"
+	depends on ARCH_RENESAS
+        help
+           linyang gps
+
 endif # if LY_CHAR
