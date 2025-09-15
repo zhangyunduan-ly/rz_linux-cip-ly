@@ -476,7 +476,9 @@
 
 	scif2_pins: scif2 {
 		pinmux = <RZG2L_PORT_PINMUX(48, 0, 1)>,	/* TxD */
-			 <RZG2L_PORT_PINMUX(48, 1, 1)>;	/* RxD */
+			 <RZG2L_PORT_PINMUX(48, 1, 1)>,	/* RxD */
+			 <RZG2L_PORT_PINMUX(48, 3, 1)>, /* CTS# */
+			 <RZG2L_PORT_PINMUX(48, 4, 1)>; /* RTS# */
 	};
 
 	scif3_pins: scif3 {
@@ -634,6 +636,7 @@
 &scif2 {
 	pinctrl-0 = <&scif2_pins>;
 	pinctrl-names = "default";
+	uart-has-rtscts;
 	status = "okay";
 };
 

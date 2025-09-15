@@ -129,6 +129,8 @@ static int gps_probe(struct platform_device *pdev)
         pr_err("gps: cannot get IRQ number\n");
         return ly_gps->irq;
     }
+    
+    init_waitqueue_head(&ly_gps->wait_q);
 
     ret = devm_request_irq(&pdev->dev,
                            ly_gps->irq,
@@ -139,8 +141,6 @@ static int gps_probe(struct platform_device *pdev)
     if (ret) {
         pr_err("gps: cannot request IRQ\n");
     }
-
-    init_waitqueue_head(&ly_gps->wait_q);
 
     ret = misc_register(&miscgps);
     if (ret < 0) {
