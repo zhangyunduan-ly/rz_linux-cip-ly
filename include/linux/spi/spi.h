@@ -185,6 +185,7 @@ struct spi_device {
 	struct device		dev;
 	struct spi_controller	*controller;
 	u32			max_speed_hz;
+	u32			ulDataPktLen;
 	u8			chip_select[SPI_CS_CNT_MAX];
 	u8			bits_per_word;
 	bool			rt;
@@ -544,6 +545,7 @@ extern struct spi_device *spi_new_ancillary_device(struct spi_device *spi, u8 ch
  * an SPI slave device.  For each such message it queues, it calls the
  * message's completion function when the transaction completes.
  */
+struct rspi_data;
 struct spi_controller {
 	struct device	dev;
 
@@ -638,6 +640,23 @@ struct spi_controller {
 	 */
 	int			(*setup)(struct spi_device *spi);
 
+	/* Enable Rx in Spi slave mode.
+	 *
+	 * IMPORTANT:  this may be called when transfers to another
+	 * device are active.  DO NOT UPDATE SHARED REGISTERS in ways
+	 * which could break those transfers.
+	 */
+	int			(*fpSlaveRxStart)(struct spi_device *_tpSpi);
+
+	/* Disable Rx in Spi slave mode.
+	 *
+	 * IMPORTANT:  this may be called when transfers to another
+	 * device are active.  DO NOT UPDATE SHARED REGISTERS in ways
+	 * which could break those transfers.
+	 */
+	int			(*fpSlaveRxStop)(struct spi_device *_tpSpi);
+
+	int         (*fpSlaveTest)(struct spi_device *_tpSpi,struct rspi_data *_tpRspi);	
 	/*
 	 * set_cs_timing() method is for SPI controllers that supports
 	 * configuring CS timing.

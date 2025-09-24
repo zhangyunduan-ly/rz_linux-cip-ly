@@ -195,26 +195,6 @@
 
 #define QSPI_BUFFER_SIZE        32u
 
-struct rspi_data {
-	void __iomem *addr;
-	u32 speed_hz;
-	struct spi_controller *ctlr;
-	struct platform_device *pdev;
-	wait_queue_head_t wait;
-	spinlock_t lock;		/* Protects RMW-access to RSPI_SSLP */
-	struct clk *clk;
-	u16 spcmd;
-	u8 spsr;
-	u8 sppcr;
-	int rx_irq, tx_irq;
-	int bits_per_word;
-	const struct spi_ops *ops;
-
-	unsigned dma_callbacked:1;
-	unsigned byte_access:1;
-	struct reset_control *rstc;
-};
-
 static void rspi_write8(const struct rspi_data *rspi, u8 data, u16 offset)
 {
 	iowrite8(data, rspi->addr + offset);
@@ -277,6 +257,39 @@ struct spi_ops {
 	u16 fifo_size;
 	u8 num_hw_ss;
 };
+
+static int rspi_dma_slave_rx_test(struct spi_device *_tpSpi,struct rspi_data *_tpRspi)
+{
+	struct rspi_data *tpRspi;		
+	u8 ucSpcr,ucSslp,ucSppcr,ucSpsr,ucSpscr,ucSpssr,ucSpbr,ucSpdcr,ucSpckd,ucSslnd,ucSpnd,ucSpbfcr;
+	u16 usSpcmd;
+	u16 usSpbfdr;
+	u32 ulSpdr;
+	if(_tpSpi) tpRspi = spi_controller_get_devdata(_tpSpi->controller);		
+	else tpRspi = _tpRspi;		
+	printk("rspi:%p \n", tpRspi);
+	ucSpcr = rspi_read8(tpRspi, RSPI_SPCR);
+	ucSslp = rspi_read8(tpRspi, RSPI_SSLP);
+	ucSppcr = rspi_read8(tpRspi, RSPI_SPPCR);
+	ucSpsr = rspi_read8(tpRspi, RSPI_SPSR);
+	ulSpdr = rspi_read32(tpRspi, RSPI_SPDR);
+	ucSpscr = rspi_read8(tpRspi, RSPI_SPSCR);
+	ucSpssr = rspi_read8(tpRspi, RSPI_SPSSR);
+	ucSpbr = rspi_read8(tpRspi, RSPI_SPBR);
+	ucSpdcr = rspi_read8(tpRspi, RSPI_SPDCR);
+	ucSpckd = rspi_read8(tpRspi, RSPI_SPCKD);
+	ucSslnd = rspi_read8(tpRspi, RSPI_SSLND);
+	ucSpnd = rspi_read8(tpRspi, RSPI_SPND);
+	usSpcmd = rspi_read16(tpRspi, RSPI_SPCMD0);
+	ucSpbfcr = rspi_read8(tpRspi, RSPI_SPBFCR);
+	usSpbfdr = rspi_read16(tpRspi, RSPI_SPBFDR);
+	printk("rspi->addr:%p \n", tpRspi->addr);
+	printk("SPCR = 0x%02x, SSLP = 0x%02x, SPPCR = 0x%02x, SPSR = 0x%02x,\n",ucSpcr,ucSslp,ucSppcr,ucSpsr);
+	printk("SPDR = 0x%08x, SPSCR = 0x%02x, SPSSR = 0x%02x, SPBR = 0x%02x,\n",ulSpdr,ucSpscr,ucSpssr,ucSpbr);
+	printk("SPDCR = 0x%02x, SPCKD = 0x%02x, SSLND = 0x%02x, SPND = 0x%02x,\n",ucSpdcr,ucSpckd,ucSslnd,ucSpnd);
+	printk("SPCMD0 = 0x%04x, SPBFCR = 0x%02x, SPBFDR = 0x%04x,\n",usSpcmd,ucSpbfcr,usSpbfdr);
+	return 0;
+}
 
 static void rspi_set_rate(struct rspi_data *rspi)
 {
@@ -1072,6 +1085,9 @@ static int rspi_setup(struct spi_device *spi)
 	if (spi_get_csgpiod(spi, 0))
 		return 0;
 
+	if (rspi->ucpRxBuf) return 0;
+	rspi->bits_per_word = spi->bits_per_word;
+
 	pm_runtime_get_sync(&rspi->pdev->dev);
 	spin_lock_irq(&rspi->lock);
 
@@ -1277,6 +1293,132 @@ static void rspi_remove(struct platform_device *pdev)
 	pm_runtime_disable(&pdev->dev);
 }
 
+static void rspi_dma_slave_complete(void *arg)
+{
+	struct rspi_data *rspi = arg;
+	struct dma_async_tx_descriptor *desc = NULL;
+	dma_cookie_t cookie;	
+	u8 *rxbuf; 
+	rxbuf= rspi->ucpRxBuf + rspi->ulRxHead;
+	rspi->ulRxHead = ((rspi->ulRxHead + rspi->ulDataPktLen) % rspi->ulRxBufSize);
+	//printk("rspi_dma_slave_complete:%ld\n",rspi->ulRxHead);
+	desc = dmaengine_prep_slave_sg(rspi->ctlr->dma_rx, &rspi->sg_rx[rspi->active_rx], 1,
+				       DMA_DEV_TO_MEM,
+				       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!desc) {
+		dev_err(&rspi->pdev->dev, "Failed to setup single DMA RX\n");
+		return ;
+	}	
+	desc->callback = rspi_dma_slave_complete;
+	desc->callback_param = rspi;
+	cookie = dmaengine_submit(desc);
+	if (dma_submit_error(cookie)){
+		dev_err(&rspi->pdev->dev, "Failed to submit DMA\n");
+		return;
+	}
+	rspi->active_rx =((rspi->active_rx+1)%mDataPktBufNum);
+	dma_async_issue_pending(rspi->ctlr->dma_rx);	
+}
+
+static int rspi_dma_slave_rx_start(struct spi_device *_tpSpi)
+{
+	struct dma_slave_config tCfg;
+	struct rspi_data *tpRspi = spi_controller_get_devdata(_tpSpi->controller);		
+	enum dma_slave_buswidth eWidth;
+	int i;
+	u8 ucIrqMask = 0;
+	unsigned int ulOtherIrq = 0;	
+	dma_addr_t ulDma;
+	struct scatterlist *tpSg;
+	struct dma_async_tx_descriptor *tpDesc;	
+	dma_cookie_t ulCookie;	
+	if (tpRspi->ucpRxBuf) return 0;
+	pm_runtime_get_sync(&tpRspi->pdev->dev);	
+	tpRspi->speed_hz = _tpSpi->max_speed_hz;
+	if (_tpSpi->mode & SPI_CPOL) tpRspi->spcmd |= SPCMD_CPOL;
+	if (_tpSpi->mode & SPI_CPHA) tpRspi->spcmd |= SPCMD_CPHA;
+	if (_tpSpi->mode & SPI_LSB_FIRST) tpRspi->spcmd |= SPCMD_LSBF;
+	/* Configure slave signal to assert */
+	tpRspi->spcmd |= SPCMD_SSLA(_tpSpi->cs_gpiod ? tpRspi->ctlr->unused_native_cs: _tpSpi->chip_select[0]);
+	/* CMOS output mode and MOSI signal from previous transfer */
+	tpRspi->sppcr = 0;
+	if (_tpSpi->mode & SPI_LOOP) tpRspi->sppcr |= SPPCR_SPLP;
+	tpRspi->ops->set_config_register(tpRspi, tpRspi->bits_per_word);
+	/* Enable SPI function*/
+	rspi_write8(tpRspi, rspi_read8(tpRspi, RSPI_SPCR) | SPCR_SPE, RSPI_SPCR);
+	rspi_rz_receive_init(tpRspi);
+	memset(&tCfg, 0, sizeof(tCfg));
+	if (tpRspi->bits_per_word == 8) eWidth = DMA_SLAVE_BUSWIDTH_1_BYTE;
+	else if (tpRspi->bits_per_word == 16) eWidth = DMA_SLAVE_BUSWIDTH_2_BYTES;
+	else eWidth = DMA_SLAVE_BUSWIDTH_4_BYTES;
+	tCfg.src_addr = tpRspi->pdev->resource->start + RSPI_SPDR;
+	tCfg.src_addr_width = eWidth;
+	tCfg.direction = DMA_DEV_TO_MEM;
+	dmaengine_slave_config(tpRspi->ctlr->dma_rx, &tCfg);
+	tpRspi->ulDataPktLen = _tpSpi->ulDataPktLen;
+	tpRspi->ulRxBufSize = tpRspi->ulDataPktLen*mDataPktBufNum;
+	tpRspi->ucpRxBuf= dma_alloc_coherent(tpRspi->ctlr->dma_rx->device->dev,tpRspi->ulRxBufSize, &ulDma, GFP_KERNEL);
+	if (!tpRspi->ucpRxBuf) {
+		dev_err(&tpRspi->pdev->dev, "dma_alloc_coherent:%ld",tpRspi->ulRxBufSize);		
+		return -ENOMEM;
+	}
+	for (i = 0; i < mDataPktBufNum; i++) {
+		tpSg = &tpRspi->sg_rx[i];
+		sg_init_table(tpSg, 1);
+		sg_dma_address(tpSg) = ulDma;
+		sg_dma_len(tpSg) = tpRspi->ulDataPktLen;
+		ulDma += tpRspi->ulDataPktLen;
+	}
+	for (i = 0; i < mDataPktBufNum; i++) {
+		tpSg = &tpRspi->sg_rx[i];
+		tpDesc = dmaengine_prep_slave_sg(tpRspi->ctlr->dma_rx,tpSg,1,DMA_DEV_TO_MEM,DMA_PREP_INTERRUPT|DMA_CTRL_ACK);
+		if (!tpDesc) {
+			dev_err(&tpRspi->pdev->dev, "Failed to setup single DMA RX\n");
+			return -EIO;
+		}	
+		tpDesc->callback = rspi_dma_slave_complete;
+		tpDesc->callback_param = tpRspi;
+		ulCookie = dmaengine_submit(tpDesc);
+		if (dma_submit_error(ulCookie)){
+			dev_err(&tpRspi->pdev->dev, "Failed to submit DMA\n");
+			return -EIO;
+		}
+	}
+	tpRspi->active_rx = 0;
+	tpRspi->ulRxHead = 0;
+	tpRspi->ulRxTail = 0;
+	if (tpRspi->rx_irq != ulOtherIrq){
+		disable_irq(tpRspi->rx_irq);	
+	}
+	ucIrqMask |= SPCR_SPRIE;
+	rspi_enable_irq(tpRspi, ucIrqMask);	
+	dma_async_issue_pending(tpRspi->ctlr->dma_rx);
+	return 0;
+}
+
+static int rspi_dma_slave_rx_stop(struct spi_device *_tpSpi)
+{
+	u8 ucIrqMask = 0;
+	unsigned int ulOtherIrq = 0;		
+	struct rspi_data *tpRspi = spi_controller_get_devdata(_tpSpi->controller);		
+	if (tpRspi->ucpRxBuf==NULL) return 0;
+	pm_runtime_put(&tpRspi->pdev->dev);	
+	/* Disable SPI function */
+	rspi_write8(tpRspi, rspi_read8(tpRspi, RSPI_SPCR) & ~SPCR_SPE, RSPI_SPCR);
+	/* Reset sequencer for Single SPI Transfers */
+	rspi_write16(tpRspi, tpRspi->spcmd, RSPI_SPCMD0);
+	rspi_write8(tpRspi, 0, RSPI_SPSCR);	
+	dmaengine_terminate_sync(tpRspi->ctlr->dma_rx);
+	ucIrqMask |= SPCR_SPRIE;
+	rspi_disable_irq(tpRspi, ucIrqMask);
+	dma_free_coherent(tpRspi->ctlr->dma_rx->device->dev,tpRspi->ulRxBufSize,tpRspi->ucpRxBuf,sg_dma_address(&tpRspi->sg_rx[0]));
+	tpRspi->ucpRxBuf = NULL;
+	tpRspi->ulRxHead = 0;
+	tpRspi->ulRxTail = 0;
+	if (tpRspi->rx_irq != ulOtherIrq) enable_irq(tpRspi->rx_irq);
+	return 0;
+}
+
 static const struct spi_ops rspi_ops = {
 	.set_config_register =	rspi_set_config_register,
 	.transfer_one =		rspi_transfer_one,
@@ -1314,6 +1456,8 @@ static const struct of_device_id rspi_of_match[] __maybe_unused = {
 	{ .compatible = "renesas,rspi", .data = &rspi_ops },
 	/* RSPI on RZ/A1H */
 	{ .compatible = "renesas,rspi-rz", .data = &rspi_rz_ops },
+	/* RSPI on RZ */
+	{ .compatible = "renesas,rspi-liyang", .data = &rspi_rz_ops },
 	/* QSPI on R-Car Gen2 */
 	{ .compatible = "renesas,qspi", .data = &qspi_ops },
 	{ /* sentinel */ }
@@ -1444,6 +1588,9 @@ static int rspi_probe(struct platform_device *pdev)
 
 	ctlr->bus_num = pdev->id;
 	ctlr->setup = rspi_setup;
+	ctlr->fpSlaveRxStart = rspi_dma_slave_rx_start;
+	ctlr->fpSlaveRxStop = rspi_dma_slave_rx_stop;
+	ctlr->fpSlaveTest = rspi_dma_slave_rx_test;
 	ctlr->auto_runtime_pm = true;
 	ctlr->transfer_one = ops->transfer_one;
 	ctlr->prepare_message = rspi_prepare_message;

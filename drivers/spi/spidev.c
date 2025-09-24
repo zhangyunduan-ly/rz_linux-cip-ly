@@ -23,6 +23,7 @@
 
 #include <linux/spi/spi.h>
 #include <linux/spi/spidev.h>
+#include <linux/spi/rspi.h>
 
 #include <linux/uaccess.h>
 
@@ -154,7 +155,7 @@ spidev_sync_read(struct spidev_data *spidev, size_t len)
 
 /* Read-only message with current device setup */
 static ssize_t
-spidev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
+spidev_master_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
 	struct spidev_data	*spidev;
 	ssize_t			status;
@@ -179,6 +180,50 @@ spidev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 	mutex_unlock(&spidev->buf_lock);
 
 	return status;
+}
+
+static ssize_t
+spidev_slave_read(struct file *_tpFilp, char __user *_cpBuf, size_t _ulCount, loff_t *_lpPos)
+{
+	struct spidev_data	*tpSpiDev;
+	struct rspi_data *tpRspi;
+	size_t ulAvailable, ulToCopy,ulRxTail,ulRxBufSize,ulRxHead;
+	dev_dbg(&tpSpiDev->spi->dev,"spidev_slave_read\n");
+	//printk("spidev_slave_read\n");
+	tpSpiDev = _tpFilp->private_data;
+	tpRspi = spi_controller_get_devdata(tpSpiDev->spi->controller);
+	ulRxHead = tpRspi->ulRxHead;
+	ulRxBufSize = tpRspi->ulRxBufSize;
+	ulRxTail = tpRspi->ulRxTail;
+	ulAvailable = ((ulRxHead+ulRxBufSize-ulRxTail)%ulRxBufSize);
+	ulToCopy = min(_ulCount, ulAvailable);
+	dev_dbg(&tpSpiDev->spi->dev,"count:%ld,%ld,%ld,%ld,%ld\n",_ulCount,ulAvailable,ulToCopy,ulRxHead,ulRxTail);
+	//printk("count:%ld,%ld,%ld,%ld,%ld\n",_ulCount,ulAvailable,ulToCopy,ulRxHead,ulRxTail);
+	if (ulToCopy == 0) return 0;
+	if ((ulRxTail+ulToCopy)<=ulRxBufSize) {
+		if (copy_to_user(_cpBuf,tpRspi->ucpRxBuf+ulRxTail,ulToCopy)) return -EFAULT;
+	} else {
+		size_t ulFirst = ulRxBufSize-ulRxTail;
+		size_t ulSecond = ulToCopy - ulFirst;
+		if (copy_to_user(_cpBuf,tpRspi->ucpRxBuf+ulRxTail,ulFirst)) return -EFAULT;
+		if (copy_to_user(_cpBuf+ulFirst,tpRspi->ucpRxBuf,ulSecond)) return -EFAULT;
+	}
+	tpRspi->ulRxTail = ((ulRxTail + ulToCopy)%ulRxBufSize);
+	return ulToCopy;	
+}
+
+static ssize_t
+spidev_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
+{
+	struct spidev_data	*spidev;
+	spidev = filp->private_data;
+	if (spidev->spi->controller->slave){
+		if(spidev->spi->ulDataPktLen){
+			return spidev_slave_read(filp,buf,count,f_pos);
+		}
+		return spidev_master_read(filp,buf,count,f_pos);
+	}
+	return spidev_master_read(filp,buf,count,f_pos);
 }
 
 /* Write-only message with current device setup */
@@ -492,6 +537,33 @@ spidev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		spi->max_speed_hz = save;
 		break;
 	}
+	case SPI_IOC_RD_LEN:
+		retval = put_user(spi->ulDataPktLen, (__u32 __user *)arg);
+		break;
+	case SPI_IOC_WR_LEN:
+		retval = get_user(tmp, (__u32 __user *)arg);
+		if (retval == 0) {
+			spi->ulDataPktLen = tmp;
+			retval = spi_setup(spi);
+			dev_dbg(&spi->dev, "%d len \n",
+				spi->ulDataPktLen);
+		}
+		break;
+	case SPI_IOC_SLAVE_RX_ENABLE:
+		if (spi->controller->fpSlaveRxStart){
+			spi->controller->fpSlaveRxStart(spi);	
+		}
+		break;
+	case SPI_IOC_SLAVE_RX_DISABLE:
+		if (spi->controller->fpSlaveRxStop){
+			spi->controller->fpSlaveRxStop(spi);	
+		}
+		break;
+	case SPI_IOC_SLAVE_RX_TEST:
+		if (spi->controller->fpSlaveTest){
+			spi->controller->fpSlaveTest(spi,NULL);	
+		}
+		break;
 	default:
 		/* segmented and/or full-duplex I/O request */
 		/* Check message and copy into scratch area */
@@ -674,7 +746,6 @@ static int spidev_release(struct inode *inode, struct file *filp)
 }
 
 static const struct file_operations spidev_fops = {
-	.owner =	THIS_MODULE,
 	/* REVISIT switch to aio primitives, so that userspace
 	 * gets more complete API coverage.  It'll simplify things
 	 * too, except for the locking.
@@ -699,6 +770,8 @@ static const struct class spidev_class = {
 };
 
 static const struct spi_device_id spidev_spi_ids[] = {
+	{ .name = "ht7132" },
+	{ .name = "cpx4" },
 	{ .name = "bh2228fv" },
 	{ .name = "dh2228fv" },
 	{ .name = "jg10309-01" },
@@ -729,6 +802,8 @@ static int spidev_of_check(struct device *dev)
 }
 
 static const struct of_device_id spidev_dt_ids[] = {
+	{ .compatible = "linyang,ht7132", .data = &spidev_of_check },
+	{ .compatible = "renesas,cpx4", .data = &spidev_of_check },
 	{ .compatible = "cisco,spi-petra", .data = &spidev_of_check },
 	{ .compatible = "dh,dhcom-board", .data = &spidev_of_check },
 	{ .compatible = "elgin,jg10309-01", .data = &spidev_of_check },
