@@ -160,6 +160,9 @@ struct sci_port {
 	bool has_rtscts;
 	bool autorts;
 	bool tx_occurred;
+
+	bool rs485_enabled;
+	struct gpio_desc *rs485_dir_gpio;
 };
 
 #define SCI_NPORTS CONFIG_SERIAL_SH_SCI_NR_UARTS
@@ -606,10 +609,30 @@ static inline unsigned long port_rx_irq_mask(struct uart_port *port)
 	return SCSCR_RIE | (to_sci_port(port)->cfg->scscr & SCSCR_REIE);
 }
 
+static void sci_rs485_set_tx_mode(struct uart_port *port)
+{
+	struct sci_port *s = to_sci_port(port);
+
+	if (s->rs485_enabled && s->rs485_dir_gpio) {
+		gpiod_set_value(s->rs485_dir_gpio, 1);
+	}
+}
+
+static void sci_rs485_set_rx_mode(struct uart_port *port)
+{
+	struct sci_port *s = to_sci_port(port);
+
+	if (s->rs485_enabled && s->rs485_dir_gpio) {
+		gpiod_set_value(s->rs485_dir_gpio, 0);
+	}
+}
+
 static void sci_start_tx(struct uart_port *port)
 {
 	struct sci_port *s = to_sci_port(port);
 	unsigned short ctrl;
+
+	sci_rs485_set_tx_mode(port);
 
 #ifdef CONFIG_SERIAL_SH_SCI_DMA
 	if (port->type == PORT_SCIFA || port->type == PORT_SCIFB) {
@@ -907,6 +930,14 @@ static void sci_transmit_chars(struct uart_port *port)
 			ctrl &= ~SCSCR_TIE;
 			ctrl |= SCSCR_TEIE;
 			sci_serial_out(port, SCSCR, ctrl);
+		} else {
+			if (s->rs485_enabled) {
+				ctrl = sci_serial_in(port, SCSCR);
+				ctrl &= ~SCSCR_TIE;
+				ctrl |= SCSCR_TEIE;
+				sci_serial_out(port, SCSCR, ctrl);
+				return;
+			}
 		}
 
 		sci_stop_tx(port);
@@ -1256,14 +1287,23 @@ static void sci_dma_tx_complete(void *arg)
 		schedule_work(&s->work_tx);
 	} else {
 		s->cookie_tx = -EINVAL;
-		if (port->type == PORT_SCIFA || port->type == PORT_SCIFB ||
-		    s->cfg->regtype == SCIx_RZ_SCIFA_REGTYPE) {
+		if (s->rs485_enabled) {
 			u16 ctrl = sci_serial_in(port, SCSCR);
-			sci_serial_out(port, SCSCR, ctrl & ~SCSCR_TIE);
-			if (s->cfg->regtype == SCIx_RZ_SCIFA_REGTYPE) {
-				/* Switch irq from DMA to SCIF */
-				dmaengine_pause(s->chan_tx_saved);
-				enable_irq(s->irqs[SCIx_TXI_IRQ]);
+			serial_port_out(port, SCSCR, ctrl & ~SCSCR_TIE);
+			/* Switch irq from DMA to SCIF */
+			dmaengine_pause(s->chan_tx_saved);
+			enable_irq(s->irqs[SCIx_TXI_IRQ]);
+			sci_serial_out(port, SCSCR, ctrl | SCSCR_TEIE);
+		} else {
+			if (port->type == PORT_SCIFA || port->type == PORT_SCIFB ||
+				s->cfg->regtype == SCIx_RZ_SCIFA_REGTYPE) {
+				u16 ctrl = sci_serial_in(port, SCSCR);
+				sci_serial_out(port, SCSCR, ctrl & ~SCSCR_TIE);
+				if (s->cfg->regtype == SCIx_RZ_SCIFA_REGTYPE) {
+					/* Switch irq from DMA to SCIF */
+					dmaengine_pause(s->chan_tx_saved);
+					enable_irq(s->irqs[SCIx_TXI_IRQ]);
+				}
 			}
 		}
 	}
@@ -1774,6 +1814,23 @@ static irqreturn_t sci_rx_interrupt(int irq, void *ptr)
 {
 	struct uart_port *port = ptr;
 	struct sci_port *s = to_sci_port(port);
+
+	if (s->rs485_enabled) {
+		unsigned long flags;
+		u16 scr = sci_serial_in(port, SCSCR);
+		u16 ssr = sci_serial_in(port, SCxSR);
+		if (scr & SCSCR_TEIE) {
+			if (ssr & SCIF_TEND) {
+				spin_lock_irqsave(&port->lock, flags);
+				scr = sci_serial_in(port, SCSCR);
+				scr &= ~(SCSCR_TEIE);
+				sci_serial_out(port, SCSCR, scr);
+				spin_unlock_irqrestore(&port->lock, flags);
+				sci_rs485_set_rx_mode(port);
+				return IRQ_HANDLED;
+			}
+		}
+	}
 
 #ifdef CONFIG_SERIAL_SH_SCI_DMA
 	if (s->chan_rx) {
@@ -3413,6 +3470,17 @@ static struct plat_sci_port *sci_parse_dt(struct platform_device *pdev,
 
 	sp->has_rtscts = of_property_read_bool(np, "uart-has-rtscts");
 	sp->rstc = rstc;
+
+	if (of_property_read_bool(np, "rs485-enabled")) {
+		sp->rs485_enabled = true;
+		sp->rs485_dir_gpio = devm_gpiod_get_optional(&pdev->dev, "rs485", GPIOD_OUT_LOW);
+		if (IS_ERR(sp->rs485_dir_gpio)) {
+			return ERR_PTR(dev_err_probe(&pdev->dev, PTR_ERR(sp->rs485_dir_gpio), 
+							"failed to get rs485 direction\n"));
+		}
+	} else {
+		sp->rs485_enabled = false;
+	}
 
 	return p;
 }
