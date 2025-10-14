@@ -27,7 +27,6 @@
 
 #include <linux/uaccess.h>
 
-
 /*
  * This supports access to SPI devices using normal userspace I/O calls.
  * Note that while traditional UNIX/POSIX I/O semantics are half duplex,
@@ -166,6 +165,9 @@ spidev_master_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 
 	spidev = filp->private_data;
 
+	dev_dbg(&spidev->spi->dev,"spidev_master_read\n");
+	dev_dbg(&spidev->spi->dev,"count:%ld,%d\n",count,bufsiz);
+
 	mutex_lock(&spidev->buf_lock);
 	status = spidev_sync_read(spidev, count);
 	if (status > 0) {
@@ -188,9 +190,9 @@ spidev_slave_read(struct file *_tpFilp, char __user *_cpBuf, size_t _ulCount, lo
 	struct spidev_data	*tpSpiDev;
 	struct rspi_data *tpRspi;
 	size_t ulAvailable, ulToCopy,ulRxTail,ulRxBufSize,ulRxHead;
-	dev_dbg(&tpSpiDev->spi->dev,"spidev_slave_read\n");
 	//printk("spidev_slave_read\n");
 	tpSpiDev = _tpFilp->private_data;
+	dev_dbg(&tpSpiDev->spi->dev,"spidev_slave_read\n");
 	tpRspi = spi_controller_get_devdata(tpSpiDev->spi->controller);
 	ulRxHead = tpRspi->ulRxHead;
 	ulRxBufSize = tpRspi->ulRxBufSize;
@@ -714,6 +716,9 @@ static int spidev_release(struct inode *inode, struct file *filp)
 
 	mutex_lock(&device_list_lock);
 	spidev = filp->private_data;
+	if (spidev->spi->controller->fpSlaveRxStop){
+		spidev->spi->controller->fpSlaveRxStop(spidev->spi);	
+	}	
 	filp->private_data = NULL;
 
 	mutex_lock(&spidev->spi_lock);
@@ -746,6 +751,7 @@ static int spidev_release(struct inode *inode, struct file *filp)
 }
 
 static const struct file_operations spidev_fops = {
+	.owner =	THIS_MODULE,
 	/* REVISIT switch to aio primitives, so that userspace
 	 * gets more complete API coverage.  It'll simplify things
 	 * too, except for the locking.
