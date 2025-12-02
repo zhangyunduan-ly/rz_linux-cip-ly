@@ -51,6 +51,8 @@
 #include <linux/syscalls.h>
 #include <linux/reboot.h>
 
+#define WITH_CAPACITOR 0
+
 #define DEVICE_NAME "ly_power"
 
 #define STATE_HIGH 1
@@ -73,8 +75,10 @@
 struct ly_power_dev {
     struct gpio_desc *battery_charge_gpios;         // 备用电池充电控制
     struct gpio_desc *battery_discharge_gpios;      // 备用电池放电控制
+#if (WITH_CAPACITOR == 1)
     struct gpio_desc *capacitor_charge_gpios;       // 超级电容充电控制
     struct gpio_desc *capacitor_discharge_gpios;    // 超级电容放电控制
+#endif
     struct gpio_desc *pfi_gpios;                    // 掉电检测
     unsigned int irq;                               // 掉电检测中断
     wait_queue_head_t wait_q;                       // 定义等待队列头部
@@ -121,7 +125,9 @@ static ssize_t power_read(struct file *filp, char __user *buf, size_t count, lof
 
     if (cnt > (DELAY_CNT * 9 / 10)) {
         gpiod_set_value(ly_power->battery_discharge_gpios, 0);
+#if (WITH_CAPACITOR == 1)
         gpiod_set_value(ly_power->capacitor_discharge_gpios, 0);
+#endif
 
         uc[0] = 0x01;
         if (ly_power->rtnflag) {
@@ -173,6 +179,7 @@ static long power_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
         break;
 
+#if (WITH_CAPACITOR == 1)
     case POWER_CHARGE_CAPACITOR:
         data = arg;
 
@@ -183,6 +190,7 @@ static long power_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         }
 
         break;
+#endif
 
     case POWER_SYSTEM_REBOOT:
         kernel_restart(NULL);
@@ -227,7 +235,9 @@ static irqreturn_t poweroff_interrupt(int irq, void *dev_id)
     if (cnt > (DELAY_CNT1 * 9 / 10)) {
         // 先打开超级电容和电池
         gpiod_set_value(ly_power->battery_discharge_gpios, 1);
+#if (WITH_CAPACITOR == 1)
         gpiod_set_value(ly_power->capacitor_discharge_gpios, 1);
+#endif
 
         // 长消抖确认是否真的发生掉电
         for (i = DELAY_CNT1; i < DELAY_CNT; i++) {
@@ -245,7 +255,9 @@ static irqreturn_t poweroff_interrupt(int irq, void *dev_id)
             ly_power->irqflag = 1;
         } else {
             gpiod_set_value(ly_power->battery_discharge_gpios, 0);
+#if (WITH_CAPACITOR == 1)
             gpiod_set_value(ly_power->capacitor_discharge_gpios, 0);
+#endif
         }
     }
 
@@ -276,6 +288,7 @@ static int power_probe(struct platform_device *pdev)
 		return PTR_ERR(ly_power->battery_discharge_gpios);
 	}
 
+#if (WITH_CAPACITOR == 1)
     /* capacitor charge gpio */
 	ly_power->capacitor_charge_gpios = devm_gpiod_get(&pdev->dev, "capacitor-charge", GPIOD_OUT_LOW);
 	if (IS_ERR(ly_power->capacitor_charge_gpios)) {
@@ -289,6 +302,7 @@ static int power_probe(struct platform_device *pdev)
 		pr_err("power: cannot get capacitor charge gpio\n");
 		return PTR_ERR(ly_power->capacitor_discharge_gpios);
 	}
+#endif
 
     /* pfi gpio */
 	ly_power->pfi_gpios = devm_gpiod_get(&pdev->dev, "pfi", GPIOD_IN);
