@@ -1446,6 +1446,8 @@ static void ravb_adjust_link(struct net_device *ndev)
 			ravb_modify(ndev, ECMR, ECMR_TXF, 0);
 			new_state = true;
 			priv->link = phydev->link;
+			ravb_rcv_snd_enable(ndev);   // restart DMA
+			netif_tx_wake_all_queues(ndev);
 		}
 	} else if (priv->link) {
 		new_state = true;
@@ -1453,6 +1455,8 @@ static void ravb_adjust_link(struct net_device *ndev)
 		priv->speed = 0;
 		if (info->half_duplex)
 			priv->duplex = -1;
+		netif_tx_stop_all_queues(ndev);
+		ravb_rcv_snd_disable(ndev);      // stop DMA
 	}
 
 	/* Enable TX and RX right over here, if E-MAC change is ignored */
