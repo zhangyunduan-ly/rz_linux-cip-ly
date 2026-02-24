@@ -233,7 +233,7 @@
 	phy-handle = <&phy0>;
 	phy-mode = "rgmii-id";
 	linux,ifname = "eth0";
-	status = "disabled";
+	status = "okay";
 
 	phy0: ethernet-phy@2 {
 		compatible = "ethernet-phy-id4f51.e91a",
@@ -564,9 +564,7 @@
 &scif1 {
 	pinctrl-0 = <&scif1_pins>;
 	pinctrl-names = "default";
-	rs485-enabled;
-	rs485-gpios = <&pinctrl RZG2L_GPIO(40, 2) GPIO_ACTIVE_LOW>;
-	status = "disabled";
+	status = "okay";
 };
 
 &scif2 {
