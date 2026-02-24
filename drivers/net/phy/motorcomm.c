@@ -1712,6 +1712,14 @@ static int yt8531_config_init(struct phy_device *phydev)
 	if (ret < 0)
 		return ret;
 
+	ret = ytphy_modify_ext_with_lock(phydev, 0xA00D, 0x3FFF, 0x2600);
+	if (ret < 0)
+		return ret;
+
+	ret = ytphy_modify_ext_with_lock(phydev, 0xA00E, 0x3FFF, 0x1800);
+	if (ret < 0)
+		return ret;
+
 	return 0;
 }
 
