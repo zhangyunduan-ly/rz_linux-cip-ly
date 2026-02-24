@@ -67,10 +67,11 @@
 #define POWER_MAGIC 'P'
 
 /* 定义命令 */
-#define POWER_CHARGE_BATTERY   _IOW(POWER_MAGIC, 1, int) // 电池充电控制
-#define POWER_CHARGE_CAPACITOR _IOW(POWER_MAGIC, 2, int) // 超级电容充电控制
-#define POWER_SYSTEM_REBOOT    _IOW(POWER_MAGIC, 3, int) // 系统重启
-#define POWER_SYSTEM_HALT      _IOW(POWER_MAGIC, 4, int) // 系统停止
+#define POWER_CHARGE_BATTERY      _IOW(POWER_MAGIC, 1, int) // 电池充电控制
+#define POWER_CHARGE_CAPACITOR    _IOW(POWER_MAGIC, 2, int) // 超级电容充电控制
+#define POWER_SYSTEM_REBOOT       _IOW(POWER_MAGIC, 3, int) // 系统重启
+#define POWER_SYSTEM_HALT         _IOW(POWER_MAGIC, 4, int) // 系统停止
+#define POWER_DISCHARGE_BATTERY   _IOW(POWER_MAGIC, 5, int) // 电池放电控制
 
 struct ly_power_dev {
     struct gpio_desc *battery_charge_gpios;         // 备用电池充电控制
@@ -110,7 +111,6 @@ static ssize_t power_read(struct file *filp, char __user *buf, size_t count, lof
         ly_power->irqflag = 1;
         ly_power->rtnflag = 0;
         ly_power->wait_i = 0;
-        ly_power->poweroff_flag = 1;
         wake_up_interruptible(&ly_power->wait_q);
         disable_irq_nosync(ly_power->irq);
     }
@@ -124,25 +124,20 @@ static ssize_t power_read(struct file *filp, char __user *buf, size_t count, lof
     }
 
     if (cnt > (DELAY_CNT * 9 / 10)) {
-        gpiod_set_value(ly_power->battery_discharge_gpios, 0);
-#if (WITH_CAPACITOR == 1)
-        gpiod_set_value(ly_power->capacitor_discharge_gpios, 0);
-#endif
-
         uc[0] = 0x01;
+        ly_power->poweroff_flag = 0;
         if (ly_power->rtnflag) {
             if (ly_power->irqflag) {
                 enable_irq(ly_power->irq);
                 init_waitqueue_head(&ly_power->wait_q);
             }
             ly_power->wait_i = 1;
-            ly_power->poweroff_flag = 0;
             if (wait_event_interruptible(ly_power->wait_q, ly_power->poweroff_flag != 0)) {
                 return -ERESTARTSYS;
             }
 
             uc[0] = 0x00;
-            ly_power->poweroff_flag = 0;
+            ly_power->poweroff_flag = 1;
             ly_power->rtnflag = 0;
             ly_power->wait_i = 0;
         } else {
@@ -150,6 +145,7 @@ static ssize_t power_read(struct file *filp, char __user *buf, size_t count, lof
         }
     } else {
         uc[0] = 0x00;
+        ly_power->poweroff_flag = 1;
         ly_power->rtnflag = 0;
         ly_power->wait_i = 0;
     }
@@ -199,6 +195,19 @@ static long power_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
     case POWER_SYSTEM_HALT:
         kernel_halt();
         break;
+
+    case POWER_DISCHARGE_BATTERY:
+        data = arg;
+
+        if (0 == data) {
+            if (ly_power->poweroff_flag == 0) {
+                gpiod_set_value(ly_power->battery_discharge_gpios, 0);
+            }
+        } else {
+            gpiod_set_value(ly_power->battery_discharge_gpios, 1);
+        }
+
+        break;
     }
 
     return ret;
@@ -222,43 +231,30 @@ static irqreturn_t poweroff_interrupt(int irq, void *dev_id)
 {
     int i = 0, cnt = 0;
 
-    pr_info("poweroff interrupt\n");
-
     // 短消抖去毛刺
-    for (i = 0; i < DELAY_CNT1; i++) {
+    for (i = 0; i < DELAY_CNT; i++) {
         udelay(1);
         if (gpiod_get_value(ly_power->pfi_gpios) == 0) {
             cnt++;
         }
     }
 
-    if (cnt > (DELAY_CNT1 * 9 / 10)) {
+    if (cnt > (DELAY_CNT * 9 / 10)) {
         // 先打开超级电容和电池
+        ly_power->poweroff_flag = 1;
         gpiod_set_value(ly_power->battery_discharge_gpios, 1);
 #if (WITH_CAPACITOR == 1)
         gpiod_set_value(ly_power->capacitor_discharge_gpios, 1);
 #endif
-
-        // 长消抖确认是否真的发生掉电
-        for (i = DELAY_CNT1; i < DELAY_CNT; i++) {
-            udelay(1);
-            if (gpiod_get_value(ly_power->pfi_gpios) == 0) {
-                cnt++;
-            }
-        }
-
-        if (cnt > (DELAY_CNT * 9 / 10)) {
-            pr_info("poweroff interrupt actual\n");
-            ly_power->poweroff_flag = 1;
-            wake_up_interruptible(&ly_power->wait_q); // 中断唤醒
-            disable_irq_nosync(irq);
-            ly_power->irqflag = 1;
-        } else {
-            gpiod_set_value(ly_power->battery_discharge_gpios, 0);
+        pr_info("poweroff interrupt actual\n");
+        wake_up_interruptible(&ly_power->wait_q); // 中断唤醒
+        disable_irq_nosync(irq);
+        ly_power->irqflag = 1;
+    } else {
+        gpiod_set_value(ly_power->battery_discharge_gpios, 0);
 #if (WITH_CAPACITOR == 1)
-            gpiod_set_value(ly_power->capacitor_discharge_gpios, 0);
+        gpiod_set_value(ly_power->capacitor_discharge_gpios, 0);
 #endif
-        }
     }
 
     return IRQ_RETVAL(IRQ_HANDLED);
