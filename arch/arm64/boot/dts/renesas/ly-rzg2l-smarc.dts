@@ -111,58 +111,9 @@
 		status = "okay";
 
 		emled_run {
-			gpios = <&pinctrl RZG2L_GPIO(39, 1) GPIO_ACTIVE_HIGH>;
+			gpios = <&pinctrl RZG2L_GPIO(19, 0) GPIO_ACTIVE_HIGH>;
 			label = "EMLED_RUN";
 			default-state = "on";
-			linux,default-trigger = "none";
-		};
-
-		emled_alarm {
-			gpios = <&pinctrl RZG2L_GPIO(39, 2) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_ALARM";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_wifi {
-			gpios = <&pinctrl RZG2L_GPIO(39, 0) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_WIFI";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_comm {
-			gpios = <&pinctrl RZG2L_GPIO(45, 3) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_COMM";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_net_2g {
-			gpios = <&pinctrl RZG2L_GPIO(46, 1) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_NET_2G";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_net_3g {
-			gpios = <&pinctrl RZG2L_GPIO(46, 2) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_NET_3G";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_net_4g {
-			gpios = <&pinctrl RZG2L_GPIO(46, 3) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_NET_4G";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_plc {
-			gpios = <&pinctrl RZG2L_GPIO(1, 1) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_PLC";
-			default-state = "off";
 			linux,default-trigger = "none";
 		};
 	};
@@ -236,30 +187,33 @@
 
 	ly_power {
 		compatible = "ly-power";
-		battery-charge-gpios = <&pinctrl RZG2L_GPIO(42, 4) GPIO_ACTIVE_HIGH>;
-		battery-discharge-gpios = <&pinctrl RZG2L_GPIO(42, 3) GPIO_ACTIVE_HIGH>;
-		capacitor-charge-gpios = <&pinctrl RZG2L_GPIO(5, 2) GPIO_ACTIVE_HIGH>;
-		capacitor-discharge-gpios = <&pinctrl RZG2L_GPIO(42, 2) GPIO_ACTIVE_HIGH>;
-		pfi-gpios = <&pinctrl RZG2L_GPIO(3, 1) GPIO_ACTIVE_HIGH>;
+		capacitor-discharge-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_HIGH>;
+		pfi-gpios = <&pinctrl RZG2L_GPIO(17, 0) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 
 	ly_watchdog {
 		compatible = "ly-watchdog";
-		feed-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_HIGH>;
+		feed-gpios = <&pinctrl RZG2L_GPIO(12, 1) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 
 	ly_gps {
 		compatible = "ly-gps";
 		pps-gpios = <&pinctrl RZG2L_GPIO(1, 0) GPIO_ACTIVE_HIGH>;
+		status = "disabled";
+	};
+
+	pps {
+		compatible = "pps-gpio";
+		gpios = <&pinctrl RZG2L_GPIO(1, 1) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 };
 
 &adc {
 	pinctrl-names = "default";
-	status = "okay";
+	status = "disabled";
 
 	/delete-node/ channel@2;
 	/delete-node/ channel@3;
@@ -275,7 +229,7 @@
 	phy-handle = <&phy0>;
 	phy-mode = "mii";
 	linux,ifname = "eth0";
-	status = "okay";
+	status = "disabled";
 
 	phy0: ethernet-phy@3 {
 		compatible = "ethernet-phy-id0000.0128",
@@ -302,7 +256,7 @@
 	phy-handle = <&phy1>;
 	phy-mode = "rgmii-id";
 	linux,ifname = "eth1";
-	status = "okay";
+	status = "disabled";
 
 	phy1: ethernet-phy@1 {
 		compatible = "ethernet-phy-id4f51.e91b",
@@ -572,7 +526,7 @@
 	pinctrl-0 = <&i2c1_pins>;
 	pinctrl-names = "default";
 	clock-frequency = <100000>;
-	status = "okay";
+	status = "disabled";
 };
 
 &i2c2 {
@@ -586,12 +540,12 @@
 	pinctrl-0 = <&i2c3_pins>;
 	pinctrl-names = "default";
 	clock-frequency = <100000>;
-	status = "okay";
+	status = "disabled";
 
 	rx8025t: rx8025t@32 {
 		compatible = "epson,rx8025t";
 		reg = <0x32>;
-		status = "okay";
+		status = "disabled";
 	};
 };
 
@@ -608,14 +562,14 @@
 	pinctrl-names = "default";
 	rs485-enabled;
 	rs485-gpios = <&pinctrl RZG2L_GPIO(40, 2) GPIO_ACTIVE_LOW>;
-	status = "okay";
+	status = "disabled";
 };
 
 &scif2 {
 	pinctrl-0 = <&scif2_pins>;
 	pinctrl-names = "default";
 	uart-has-rtscts;
-	status = "okay";
+	status = "disabled";
 };
 
 &scif3 {
@@ -627,23 +581,19 @@
 &scif4 {
 	pinctrl-0 = <&scif4_pins>;
 	pinctrl-names = "default";
-	rs485-enabled;
-	rs485-gpios = <&pinctrl RZG2L_GPIO(3, 0) GPIO_ACTIVE_LOW>;
-	/delete-property/ dmas;
-	/delete-property/ dma-names;
 	status = "okay";
 };
 
 &sci0 {
 	pinctrl-0 = <&sci0_pins>;
 	pinctrl-names = "default";
-	status = "okay";
+	status = "disabled";
 };
 
 &sci1 {
 	pinctrl-0 = <&sci1_pins>;
 	pinctrl-names = "default";
-	status = "okay";
+	status = "disabled";
 };
 
 &sdhi0 {
@@ -678,7 +628,7 @@
 	pinctrl-0 = <&spi0_pins>;
 	pinctrl-names = "default";
 	spi-slave;
-	status = "okay";
+	status = "disabled";
 	slave {
 		compatible = "rohm,dh2228fv";
 		reg = <0>;
@@ -691,12 +641,13 @@
 &spi1 {
 	pinctrl-0 = <&spi1_pins>;
 	pinctrl-names = "default";
+	spi-slave;
 	status = "okay";
-	spi1dev@0 {
+	slave {
 		compatible = "rohm,dh2228fv";
 		reg = <0>;
 		spi-max-frequency = <50000000>;
-		spi-cpha; 
+		spi-cpha;
 		status = "okay";
 	};
 };
