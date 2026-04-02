@@ -120,7 +120,6 @@ static ssize_t power_read(struct file *filp, char __user *buf, size_t count, lof
     }
 
     if (cnt > (DELAY_CNT * 9 / 10)) {
-        gpiod_set_value(ly_power->battery_discharge_gpios, 0);
         gpiod_set_value(ly_power->capacitor_discharge_gpios, 0);
 
         uc[0] = 0x01;
@@ -163,25 +162,9 @@ static long power_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
     switch (cmd) {
 
     case POWER_CHARGE_BATTERY:
-        data = arg;
-
-        if (0 == data) {
-            gpiod_set_value(ly_power->battery_charge_gpios, 0);
-        } else {
-            gpiod_set_value(ly_power->battery_charge_gpios, 1);
-        }
-
         break;
 
     case POWER_CHARGE_CAPACITOR:
-        data = arg;
-
-        if (0 == data) {
-            gpiod_set_value(ly_power->capacitor_charge_gpios, 0);
-        } else {
-            gpiod_set_value(ly_power->capacitor_charge_gpios, 1);
-        }
-
         break;
 
     case POWER_SYSTEM_REBOOT:
@@ -226,7 +209,6 @@ static irqreturn_t poweroff_interrupt(int irq, void *dev_id)
 
     if (cnt > (DELAY_CNT1 * 9 / 10)) {
         // 先打开超级电容和电池
-        gpiod_set_value(ly_power->battery_discharge_gpios, 1);
         gpiod_set_value(ly_power->capacitor_discharge_gpios, 1);
 
         // 长消抖确认是否真的发生掉电
@@ -244,7 +226,6 @@ static irqreturn_t poweroff_interrupt(int irq, void *dev_id)
             disable_irq_nosync(irq);
             ly_power->irqflag = 1;
         } else {
-            gpiod_set_value(ly_power->battery_discharge_gpios, 0);
             gpiod_set_value(ly_power->capacitor_discharge_gpios, 0);
         }
     }
@@ -261,27 +242,6 @@ static int power_probe(struct platform_device *pdev)
         pr_err("power: no memory to zalloc\n");
         ret = -ENOMEM;
     }
-
-    /* battery charge gpio */
-	ly_power->battery_charge_gpios = devm_gpiod_get(&pdev->dev, "battery-charge", GPIOD_OUT_LOW);
-	if (IS_ERR(ly_power->battery_charge_gpios)) {
-		pr_err("power: cannot get battery charge gpio\n");
-		return PTR_ERR(ly_power->battery_charge_gpios);
-	}
-
-    /* battery discharge gpio */
-	ly_power->battery_discharge_gpios = devm_gpiod_get(&pdev->dev, "battery-discharge", GPIOD_OUT_LOW);
-	if (IS_ERR(ly_power->battery_discharge_gpios)) {
-		pr_err("power: cannot get battery discharge gpio\n");
-		return PTR_ERR(ly_power->battery_discharge_gpios);
-	}
-
-    /* capacitor charge gpio */
-	ly_power->capacitor_charge_gpios = devm_gpiod_get(&pdev->dev, "capacitor-charge", GPIOD_OUT_LOW);
-	if (IS_ERR(ly_power->capacitor_charge_gpios)) {
-		pr_err("power: cannot get capacitor charge gpio\n");
-		return PTR_ERR(ly_power->capacitor_charge_gpios);
-	}
 
     /* capacitor discharge gpio */
 	ly_power->capacitor_discharge_gpios = devm_gpiod_get(&pdev->dev, "capacitor-discharge", GPIOD_OUT_LOW);
