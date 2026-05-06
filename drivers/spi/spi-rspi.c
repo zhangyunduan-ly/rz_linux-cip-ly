@@ -1335,9 +1335,21 @@ static int rspi_dma_slave_rx_start(struct spi_device *_tpSpi)
 	if (tpRspi->ucpRxBuf) return 0;
 	pm_runtime_get_sync(&tpRspi->pdev->dev);	
 	tpRspi->speed_hz = _tpSpi->max_speed_hz;
-	if (_tpSpi->mode & SPI_CPOL) tpRspi->spcmd |= SPCMD_CPOL;
-	if (_tpSpi->mode & SPI_CPHA) tpRspi->spcmd |= SPCMD_CPHA;
-	if (_tpSpi->mode & SPI_LSB_FIRST) tpRspi->spcmd |= SPCMD_LSBF;
+	if (_tpSpi->mode & SPI_CPOL) {
+		tpRspi->spcmd |= SPCMD_CPOL;
+	} else {
+		tpRspi->spcmd &= ~SPCMD_CPOL;
+	}
+	if (_tpSpi->mode & SPI_CPHA) {
+		tpRspi->spcmd |= SPCMD_CPHA;
+	} else {
+		tpRspi->spcmd &= ~SPCMD_CPHA;
+	}
+	if (_tpSpi->mode & SPI_LSB_FIRST) {
+		tpRspi->spcmd |= SPCMD_LSBF;
+	} else {
+		tpRspi->spcmd &= ~SPCMD_LSBF;
+	}
 	/* Configure slave signal to assert */
 	tpRspi->spcmd |= SPCMD_SSLA(_tpSpi->cs_gpiod ? tpRspi->ctlr->unused_native_cs: _tpSpi->chip_select[0]);
 	/* CMOS output mode and MOSI signal from previous transfer */
