@@ -187,7 +187,7 @@
 
 	ly_power {
 		compatible = "ly-power";
-		capacitor-discharge-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_HIGH>;
+		capacitor-discharge-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_LOW>;
 		pfi-gpios = <&pinctrl RZG2L_GPIO(17, 0) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
