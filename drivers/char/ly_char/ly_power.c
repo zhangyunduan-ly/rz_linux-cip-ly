@@ -58,7 +58,7 @@
 
 #define IO_MUX_NUM 64
 
-#define DELAY_CNT  6000 // 消抖时间
+#define DELAY_CNT  1000 // 消抖时间
 #define DELAY_CNT1 1000 // 短消抖时间
 
 /* 定义魔数 */
@@ -196,8 +196,6 @@ static struct miscdevice miscpower = {
 static irqreturn_t poweroff_interrupt(int irq, void *dev_id)
 {
     int i = 0, cnt = 0;
-
-    pr_info("poweroff interrupt\n");
 
     // 短消抖去毛刺
     for (i = 0; i < DELAY_CNT1; i++) {
