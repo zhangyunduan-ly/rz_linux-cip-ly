@@ -49,6 +49,7 @@ struct rspi_data {
 	size_t ulRxBufSize;
 	volatile size_t ulRxHead;
 	volatile size_t ulRxTail;
+	struct timespec64 sPktTime[mDataPktBufNum];
 };
 
 #endif
