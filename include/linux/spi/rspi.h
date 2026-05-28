@@ -13,7 +13,7 @@ enum {
 	RSPI_SPI_SLAVE,
 };
 
-#define mDataPktBufNum		(4)
+#define mDataPktBufNum		(12)
 
 struct rspi_plat_data {
 	unsigned int dma_tx_id;
