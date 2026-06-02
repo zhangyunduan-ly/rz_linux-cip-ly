@@ -179,7 +179,7 @@ static int rx8025_set_time(struct device *dev, struct rtc_time *dt)
 	date[RX8025_REG_SEC] = bin2bcd(dt->tm_sec);
 	date[RX8025_REG_MIN] = bin2bcd(dt->tm_min);
 	date[RX8025_REG_HOUR] = bin2bcd(dt->tm_hour);
-	date[RX8025_REG_WDAY] = bin2bcd(1 << dt->tm_wday);
+	date[RX8025_REG_WDAY] = bin2bcd(dt->tm_wday+1);
 	date[RX8025_REG_MDAY] = bin2bcd(dt->tm_mday);
 	date[RX8025_REG_MONTH] = bin2bcd(dt->tm_mon+1);
 	date[RX8025_REG_YEAR] = bin2bcd(dt->tm_year-100);
@@ -352,8 +352,7 @@ static int rx8025_probe(struct i2c_client *client)
 		struct rtc_time tm;
 		dev_info(&client->dev,
 			 "bad conditions detected, resetting date\n");
-		//rtc_time_to_tm(0, &tm);	/* 1970/1/1 */
-		rtc_time64_to_tm(0,&tm);
+		rtc_time64_to_tm(946684800, &tm); /* 2000/1/1 */
 		rx8025_set_time(&client->dev, &tm);
 	}
 
