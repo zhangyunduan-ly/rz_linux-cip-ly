@@ -18,10 +18,14 @@
 
 	aliases {
 		serial0 = &scif0;
+		serial3 = &scif3;
+		serial4 = &scif4;
 
 		i2c0 = &i2c0;
 
 		mmc0 = &sdhi0;
+
+		rspi0 = &spi0;
 	};
 
 	chosen {
@@ -86,19 +90,26 @@
 
 	leds {
 		compatible = "gpio-leds";
-		status = "disabled";
+		status = "okay";
+
+		emled_run {
+			gpios = <&pinctrl RZG2L_GPIO(16, 0) GPIO_ACTIVE_HIGH>;
+			label = "EMLED_RUN";
+			default-state = "on";
+			linux,default-trigger = "none";
+		};
 	};
     
 	ly_power {
 		compatible = "ly-power";
-		capacitor-discharge-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_LOW>;
-		pfi-gpios = <&pinctrl RZG2L_GPIO(17, 0) GPIO_ACTIVE_HIGH>;
+		capacitor-discharge-gpios = <&pinctrl RZG2L_GPIO(10, 0) GPIO_ACTIVE_LOW>;
+		pfi-gpios = <&pinctrl RZG2L_GPIO(7, 4) GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 
 	ly_watchdog {
 		compatible = "ly-watchdog";
-		feed-gpios = <&pinctrl RZG2L_GPIO(12, 1) GPIO_ACTIVE_HIGH>;
+		feed-gpios = <&pinctrl RZG2L_GPIO(9, 3) GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 };
@@ -153,6 +164,23 @@
 		pinmux = <RZG2L_PORT_PINMUX(6, 4, 6)>, /* TxD */
 			 <RZG2L_PORT_PINMUX(6, 3, 6)>; /* RxD */
 	};
+
+	scif3_pins: scif3 {
+		pinmux = <RZG2L_PORT_PINMUX(12, 0, 5)>, /* TxD */
+			 <RZG2L_PORT_PINMUX(12, 1, 5)>; /* RxD */
+	};
+
+	scif4_pins: scif4 {
+		pinmux = <RZG2L_PORT_PINMUX(9, 2, 6)>, /* TxD */
+			 <RZG2L_PORT_PINMUX(9, 1, 6)>; /* RxD */
+	};
+
+	spi0_pins: spi0 {
+		pinmux = <RZG2L_PORT_PINMUX(15, 0, 1)>, /* CK */
+			 <RZG2L_PORT_PINMUX(15, 1, 1)>, /* MOSI */
+			 <RZG2L_PORT_PINMUX(15, 2, 1)>, /* MISO */
+			 <RZG2L_PORT_PINMUX(15, 3, 1)>; /* SSL */
+	};
 };
 
 &canfd {
@@ -206,6 +234,20 @@
 &scif0 {
 	pinctrl-0 = <&scif0_pins>;
 	pinctrl-names = "default";
+	dmas = <&dmac 0x4e79>, <&dmac 0x4e7a>;
+	dma-names = "tx", "rx";
+	status = "okay";
+};
+
+&scif3 {
+	pinctrl-0 = <&scif3_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&scif4 {
+	pinctrl-0 = <&scif4_pins>;
+	pinctrl-names = "default";
 	status = "okay";
 };
 
@@ -221,4 +263,18 @@
 	non-removable;
 	fixed-emmc-driver-type = <1>;
 	status = "okay";
+};
+
+&spi0 {
+	pinctrl-0 = <&spi0_pins>;
+	pinctrl-names = "default";
+	spi-slave;
+	status = "okay";
+	slave {
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+		spi-cpha;
+		status = "okay";
+	};
 };
