@@ -1600,6 +1600,12 @@ config SERIAL_ESP32_ACM
 	  snippet may be used:
 	    earlycon=esp32s3acm,mmio32,0x60038000
 
+config SERIAL_GPIO
+	tristate "GPIO UART support"
+	select SERIAL_CORE
+	help
+	  Driver for simulate UART using GPIO
+
 endmenu
 
 config SERIAL_MCTRL_GPIO
