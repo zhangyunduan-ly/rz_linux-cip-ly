@@ -639,6 +639,7 @@ static void option_instat_callback(struct urb *urb);
 
 
 static const struct usb_device_id option_ids[] = {
+	{ USB_DEVICE(0x2ECC, 0x3017) },
 	{ USB_DEVICE(0x3763, 0x3C93) },
 	{ USB_DEVICE(0x2949, 0x8700) },
 	{ USB_DEVICE(OPTION_VENDOR_ID, OPTION_PRODUCT_COLT) },
