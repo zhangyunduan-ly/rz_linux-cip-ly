@@ -28,7 +28,6 @@
 
 		i2c0 = &i2c0;
 		i2c1 = &i2c1;
-		i2c3 = &i2c3;
 
 		mmc0 = &sdhi0;
 		mmc1 = &sdhi1;
@@ -172,43 +171,27 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		autorepeat;
-		status = "disabled";
+		status = "okay";
 
 		key-up {
 			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(46, 0) IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <RZG2L_GPIO(4, 1) IRQ_TYPE_EDGE_FALLING>;
 			linux,code = <KEY_UP>;
 			debounce-interval = <20>;
 			label = "key_up";
 		};
 
-		key-left {
-			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(46, 1) IRQ_TYPE_EDGE_FALLING>;
-			linux,code = <KEY_LEFT>;
-			debounce-interval = <20>;
-			label = "key_left";
-		};
-
 		key-down {
 			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(46, 2) IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <RZG2L_GPIO(14, 1) IRQ_TYPE_EDGE_FALLING>;
 			linux,code = <KEY_DOWN>;
 			debounce-interval = <20>;
 			label = "key_down";
 		};
 
-		key-right {
-			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(46, 3) IRQ_TYPE_EDGE_FALLING>;
-			linux,code = <KEY_RIGHT>;
-			debounce-interval = <20>;
-			label = "key_right";
-		};
-
 		key-esc {
 			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(1, 1) IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <RZG2L_GPIO(15, 1) IRQ_TYPE_EDGE_FALLING>;
 			linux,code = <KEY_ESC>;
 			debounce-interval = <20>;
 			label = "key_esc";
@@ -216,7 +199,7 @@
 
 		key-enter {
 			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(1, 0) IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <RZG2L_GPIO(16, 0) IRQ_TYPE_EDGE_FALLING>;
 			linux,code = <KEY_ENTER>;
 			debounce-interval = <20>;
 			label = "key_enter";
@@ -231,7 +214,7 @@
 		lcd-CSB-gpios = <&pinctrl RZG2L_GPIO(45, 2) GPIO_ACTIVE_HIGH>;
 		lcd-RSTB-gpios = <&pinctrl RZG2L_GPIO(18, 0) GPIO_ACTIVE_HIGH>;
 		lcd-BL-gpios = <&pinctrl RZG2L_GPIO(45, 3) GPIO_ACTIVE_LOW>;
-		status = "disabled";
+		status = "okay";
 	};
 
 	ly_power {
@@ -250,9 +233,16 @@
 		status = "okay";
 	};
 
-	ly_gps {
-		compatible = "ly-gps";
-		pps-gpios = <&pinctrl RZG2L_GPIO(1, 0) GPIO_ACTIVE_HIGH>;
+	pps {
+		compatible = "pps-gpio";
+		gpios = <&pinctrl RZG2L_GPIO(3, 0) GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+	gpio_uart0: gpio-uart@0 {
+		compatible = "gpio-uart";
+		tx-gpios = <&pinctrl RZG2L_GPIO(48, 4) GPIO_ACTIVE_HIGH>;
+		rx-gpios = <&pinctrl RZG2L_GPIO(48, 3) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 };
@@ -432,16 +422,6 @@
 		input-enable;
 	};
 
-	i2c2_pins: i2c2 {
-		pinmux = <RZG2L_PORT_PINMUX(19, 0, 4)>, /* SDA */
-			 <RZG2L_PORT_PINMUX(19, 1, 4)>; /* SCL */
-	};
-
-	i2c3_pins: i2c3 {
-		pinmux = <RZG2L_PORT_PINMUX(8, 1, 4)>, /* SDA */
-			 <RZG2L_PORT_PINMUX(8, 0, 4)>; /* SCL */
-	};
-
 	scif0_pins: scif0 {
 		pinmux = <RZG2L_PORT_PINMUX(38, 0, 1)>,	/* TxD */
 			 <RZG2L_PORT_PINMUX(38, 1, 1)>;	/* RxD */
@@ -449,14 +429,14 @@
 
 	scif1_pins: scif1 {
 		pinmux = <RZG2L_PORT_PINMUX(40, 0, 1)>,	/* TxD */
-			 <RZG2L_PORT_PINMUX(40, 1, 1)>;	/* RxD */
+			 <RZG2L_PORT_PINMUX(40, 1, 1)>,	/* RxD */
+			 <RZG2L_PORT_PINMUX(41, 0, 1)>, /* CTS# */
+			 <RZG2L_PORT_PINMUX(41, 1, 1)>; /* RTS# */
 	};
 
 	scif2_pins: scif2 {
 		pinmux = <RZG2L_PORT_PINMUX(48, 0, 1)>,	/* TxD */
-			 <RZG2L_PORT_PINMUX(48, 1, 1)>,	/* RxD */
-			 <RZG2L_PORT_PINMUX(48, 3, 1)>, /* CTS# */
-			 <RZG2L_PORT_PINMUX(48, 4, 1)>; /* RTS# */
+			 <RZG2L_PORT_PINMUX(48, 1, 1)>;	/* RxD */
 	};
 
 	scif3_pins: scif3 {
@@ -573,20 +553,6 @@
 	pinctrl-names = "default";
 	clock-frequency = <100000>;
 	status = "okay";
-};
-
-&i2c2 {
-	pinctrl-0 = <&i2c2_pins>;
-	pinctrl-names = "default";
-	clock-frequency = <100000>;
-	status = "disabled";
-};
-
-&i2c3 {
-	pinctrl-0 = <&i2c3_pins>;
-	pinctrl-names = "default";
-	clock-frequency = <100000>;
-	status = "okay";
 
 	rx8025t: rx8025t@32 {
 		compatible = "epson,rx8025t";
@@ -606,31 +572,35 @@
 &scif1 {
 	pinctrl-0 = <&scif1_pins>;
 	pinctrl-names = "default";
-	rs485-enabled;
-	rs485-gpios = <&pinctrl RZG2L_GPIO(40, 2) GPIO_ACTIVE_LOW>;
+	dmas = <&dmac 0x4e7d>, <&dmac 0x4e7e>;
+	dma-names = "tx", "rx";
+	uart-has-rtscts;
 	status = "okay";
 };
 
 &scif2 {
 	pinctrl-0 = <&scif2_pins>;
 	pinctrl-names = "default";
-	uart-has-rtscts;
+	dmas = <&dmac 0x4e81>, <&dmac 0x4e82>;
+	dma-names = "tx", "rx";
+	rs485-enabled;
+	rs485-gpios = <&pinctrl RZG2L_GPIO(48, 2) GPIO_ACTIVE_LOW>;
 	status = "okay";
 };
 
 &scif3 {
 	pinctrl-0 = <&scif3_pins>;
 	pinctrl-names = "default";
+	dmas = <&dmac 0x4e85>, <&dmac 0x4e86>;
+	dma-names = "tx", "rx";
 	status = "okay";
 };
 
 &scif4 {
 	pinctrl-0 = <&scif4_pins>;
 	pinctrl-names = "default";
-	rs485-enabled;
-	rs485-gpios = <&pinctrl RZG2L_GPIO(3, 0) GPIO_ACTIVE_LOW>;
-	/delete-property/ dmas;
-	/delete-property/ dma-names;
+	dmas = <&dmac 0x4e89>, <&dmac 0x4e8a>;
+	dma-names = "tx", "rx";
 	status = "okay";
 };
 
@@ -691,13 +661,13 @@
 &spi1 {
 	pinctrl-0 = <&spi1_pins>;
 	pinctrl-names = "default";
-	status = "okay";
+	status = "disabled";
 	spi1dev@0 {
 		compatible = "rohm,dh2228fv";
 		reg = <0>;
 		spi-max-frequency = <50000000>;
 		spi-cpha; 
-		status = "okay";
+		status = "disabled";
 	};
 };
 
