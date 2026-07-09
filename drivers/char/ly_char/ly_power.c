@@ -270,7 +270,7 @@ static int power_probe(struct platform_device *pdev)
 	}
 
     /* battery discharge gpio */
-	ly_power->battery_discharge_gpios = devm_gpiod_get(&pdev->dev, "battery-discharge", GPIOD_OUT_LOW);
+	ly_power->battery_discharge_gpios = devm_gpiod_get(&pdev->dev, "battery-discharge", GPIOD_OUT_HIGH);
 	if (IS_ERR(ly_power->battery_discharge_gpios)) {
 		pr_err("power: cannot get battery discharge gpio\n");
 		return PTR_ERR(ly_power->battery_discharge_gpios);

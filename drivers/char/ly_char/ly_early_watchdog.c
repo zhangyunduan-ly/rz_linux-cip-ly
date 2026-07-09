@@ -6,7 +6,7 @@
 #include <linux/kernel.h>
 #include <linux/gpio.h>
 
-#define WDI_PIN 649 // (17*8+1)+512
+#define WDI_PIN 648 // (17*8+0)+512
 
 static struct timer_list watchdog_timer;
 static int timer_index = 0;

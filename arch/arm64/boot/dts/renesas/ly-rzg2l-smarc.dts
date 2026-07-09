@@ -110,57 +110,29 @@
 		status = "okay";
 
 		emled_run {
-			gpios = <&pinctrl RZG2L_GPIO(39, 1) GPIO_ACTIVE_HIGH>;
+			gpios = <&pinctrl RZG2L_GPIO(16, 1) GPIO_ACTIVE_HIGH>;
 			label = "EMLED_RUN";
 			default-state = "on";
 			linux,default-trigger = "none";
 		};
 
 		emled_alarm {
-			gpios = <&pinctrl RZG2L_GPIO(39, 2) GPIO_ACTIVE_HIGH>;
+			gpios = <&pinctrl RZG2L_GPIO(15, 0) GPIO_ACTIVE_HIGH>;
 			label = "EMLED_ALARM";
 			default-state = "off";
 			linux,default-trigger = "none";
 		};
 
-		emled_wifi {
-			gpios = <&pinctrl RZG2L_GPIO(39, 0) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_WIFI";
+		emled_rs485 {
+			gpios = <&pinctrl RZG2L_GPIO(14, 1) GPIO_ACTIVE_HIGH>;
+			label = "EMLED_RS485";
 			default-state = "off";
 			linux,default-trigger = "none";
 		};
 
-		emled_comm {
-			gpios = <&pinctrl RZG2L_GPIO(45, 3) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_COMM";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_net_2g {
-			gpios = <&pinctrl RZG2L_GPIO(46, 1) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_NET_2G";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_net_3g {
-			gpios = <&pinctrl RZG2L_GPIO(46, 2) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_NET_3G";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_net_4g {
-			gpios = <&pinctrl RZG2L_GPIO(46, 3) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_NET_4G";
-			default-state = "off";
-			linux,default-trigger = "none";
-		};
-
-		emled_plc {
-			gpios = <&pinctrl RZG2L_GPIO(1, 1) GPIO_ACTIVE_HIGH>;
-			label = "EMLED_PLC";
+		emled_rs232 {
+			gpios = <&pinctrl RZG2L_GPIO(14, 0) GPIO_ACTIVE_HIGH>;
+			label = "EMLED_RS232";
 			default-state = "off";
 			linux,default-trigger = "none";
 		};
@@ -175,7 +147,7 @@
 
 		key-up {
 			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(4, 1) IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <RZG2L_GPIO(10, 0) IRQ_TYPE_EDGE_FALLING>;
 			linux,code = <KEY_UP>;
 			debounce-interval = <20>;
 			label = "key_up";
@@ -183,7 +155,7 @@
 
 		key-down {
 			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(14, 1) IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <RZG2L_GPIO(4, 1) IRQ_TYPE_EDGE_FALLING>;
 			linux,code = <KEY_DOWN>;
 			debounce-interval = <20>;
 			label = "key_down";
@@ -191,7 +163,7 @@
 
 		key-esc {
 			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(15, 1) IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <RZG2L_GPIO(7, 2) IRQ_TYPE_EDGE_FALLING>;
 			linux,code = <KEY_ESC>;
 			debounce-interval = <20>;
 			label = "key_esc";
@@ -199,7 +171,7 @@
 
 		key-enter {
 			interrupt-parent = <&pinctrl>;
-			interrupts = <RZG2L_GPIO(16, 0) IRQ_TYPE_EDGE_FALLING>;
+			interrupts = <RZG2L_GPIO(9, 1) IRQ_TYPE_EDGE_RISING>;
 			linux,code = <KEY_ENTER>;
 			debounce-interval = <20>;
 			label = "key_enter";
@@ -219,30 +191,30 @@
 
 	ly_power {
 		compatible = "ly-power";
-		battery-charge-gpios = <&pinctrl RZG2L_GPIO(42, 4) GPIO_ACTIVE_HIGH>;
-		battery-discharge-gpios = <&pinctrl RZG2L_GPIO(42, 3) GPIO_ACTIVE_HIGH>;
-		capacitor-charge-gpios = <&pinctrl RZG2L_GPIO(5, 2) GPIO_ACTIVE_HIGH>;
-		capacitor-discharge-gpios = <&pinctrl RZG2L_GPIO(42, 2) GPIO_ACTIVE_HIGH>;
-		pfi-gpios = <&pinctrl RZG2L_GPIO(3, 1) GPIO_ACTIVE_HIGH>;
+		battery-charge-gpios = <&pinctrl RZG2L_GPIO(3, 0) GPIO_ACTIVE_HIGH>;
+		battery-discharge-gpios = <&pinctrl RZG2L_GPIO(42, 4) GPIO_ACTIVE_HIGH>;
+		capacitor-charge-gpios = <&pinctrl RZG2L_GPIO(15, 1) GPIO_ACTIVE_HIGH>;
+		capacitor-discharge-gpios = <&pinctrl RZG2L_GPIO(16, 0) GPIO_ACTIVE_HIGH>;
+		pfi-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 
 	ly_watchdog {
 		compatible = "ly-watchdog";
-		feed-gpios = <&pinctrl RZG2L_GPIO(17, 1) GPIO_ACTIVE_HIGH>;
+		feed-gpios = <&pinctrl RZG2L_GPIO(17, 0) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 
 	pps {
 		compatible = "pps-gpio";
-		gpios = <&pinctrl RZG2L_GPIO(3, 0) GPIO_ACTIVE_HIGH>;
+		gpios = <&pinctrl RZG2L_GPIO(3, 1) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 
 	gpio_uart0: gpio-uart@0 {
 		compatible = "gpio-uart";
-		tx-gpios = <&pinctrl RZG2L_GPIO(48, 4) GPIO_ACTIVE_HIGH>;
-		rx-gpios = <&pinctrl RZG2L_GPIO(48, 3) GPIO_ACTIVE_HIGH>;
+		tx-gpios = <&pinctrl RZG2L_GPIO(46, 3) GPIO_ACTIVE_HIGH>;
+		rx-gpios = <&pinctrl RZG2L_GPIO(46, 2) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 };
@@ -552,12 +524,12 @@
 	pinctrl-0 = <&i2c1_pins>;
 	pinctrl-names = "default";
 	clock-frequency = <100000>;
-	status = "okay";
+	status = "disabled";
 
 	rx8025t: rx8025t@32 {
 		compatible = "epson,rx8025t";
 		reg = <0x32>;
-		status = "okay";
+		status = "disabled";
 	};
 };
 
