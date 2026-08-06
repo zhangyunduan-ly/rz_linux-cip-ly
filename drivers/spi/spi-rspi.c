@@ -27,6 +27,7 @@
 #include <linux/spi/rspi.h>
 #include <linux/spinlock.h>
 #include <linux/iopoll.h>
+#include <linux/time64.h>
 
 #define RSPI_SPCR		0x00	/* Control Register */
 #define RSPI_SSLP		0x01	/* Slave Select Polarity Register */
@@ -1299,6 +1300,9 @@ static void rspi_dma_slave_complete(void *arg)
 	struct dma_async_tx_descriptor *desc = NULL;
 	dma_cookie_t cookie;	
 	u8 *rxbuf; 
+	unsigned int pktnum;
+	pktnum = (rspi->ulRxHead / rspi->ulDataPktLen) % mDataPktBufNum;
+	ktime_get_real_ts64(&rspi->sPktTime[pktnum]);
 	rxbuf= rspi->ucpRxBuf + rspi->ulRxHead;
 	rspi->ulRxHead = ((rspi->ulRxHead + rspi->ulDataPktLen) % rspi->ulRxBufSize);
 	//printk("rspi_dma_slave_complete:%ld\n",rspi->ulRxHead);

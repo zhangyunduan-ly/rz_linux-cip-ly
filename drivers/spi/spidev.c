@@ -26,6 +26,7 @@
 #include <linux/spi/rspi.h>
 
 #include <linux/uaccess.h>
+#include <linux/time64.h>
 
 /*
  * This supports access to SPI devices using normal userspace I/O calls.
@@ -190,6 +191,8 @@ spidev_slave_read(struct file *_tpFilp, char __user *_cpBuf, size_t _ulCount, lo
 	struct spidev_data	*tpSpiDev;
 	struct rspi_data *tpRspi;
 	size_t ulAvailable, ulToCopy,ulRxTail,ulRxBufSize,ulRxHead;
+	struct timespec64 sPktTime;
+	unsigned int ulPktNum;
 	//printk("spidev_slave_read\n");
 	tpSpiDev = _tpFilp->private_data;
 	dev_dbg(&tpSpiDev->spi->dev,"spidev_slave_read\n");
@@ -199,19 +202,22 @@ spidev_slave_read(struct file *_tpFilp, char __user *_cpBuf, size_t _ulCount, lo
 	ulRxTail = tpRspi->ulRxTail;
 	ulAvailable = ((ulRxHead+ulRxBufSize-ulRxTail)%ulRxBufSize);
 	ulToCopy = min(_ulCount, ulAvailable);
+	ulPktNum = (ulRxTail / tpRspi->ulDataPktLen) % mDataPktBufNum;
+	sPktTime = tpRspi->sPktTime[ulPktNum];
 	dev_dbg(&tpSpiDev->spi->dev,"count:%ld,%ld,%ld,%ld,%ld\n",_ulCount,ulAvailable,ulToCopy,ulRxHead,ulRxTail);
 	//printk("count:%ld,%ld,%ld,%ld,%ld\n",_ulCount,ulAvailable,ulToCopy,ulRxHead,ulRxTail);
 	if (ulToCopy == 0) return 0;
+	if (copy_to_user(_cpBuf,(void*)&sPktTime,sizeof(sPktTime))) return -EFAULT;
 	if ((ulRxTail+ulToCopy)<=ulRxBufSize) {
-		if (copy_to_user(_cpBuf,tpRspi->ucpRxBuf+ulRxTail,ulToCopy)) return -EFAULT;
+		if (copy_to_user(_cpBuf+sizeof(sPktTime),tpRspi->ucpRxBuf+ulRxTail,ulToCopy)) return -EFAULT;
 	} else {
 		size_t ulFirst = ulRxBufSize-ulRxTail;
 		size_t ulSecond = ulToCopy - ulFirst;
-		if (copy_to_user(_cpBuf,tpRspi->ucpRxBuf+ulRxTail,ulFirst)) return -EFAULT;
-		if (copy_to_user(_cpBuf+ulFirst,tpRspi->ucpRxBuf,ulSecond)) return -EFAULT;
+		if (copy_to_user(_cpBuf+sizeof(sPktTime),tpRspi->ucpRxBuf+ulRxTail,ulFirst)) return -EFAULT;
+		if (copy_to_user(_cpBuf+sizeof(sPktTime)+ulFirst,tpRspi->ucpRxBuf,ulSecond)) return -EFAULT;
 	}
 	tpRspi->ulRxTail = ((ulRxTail + ulToCopy)%ulRxBufSize);
-	return ulToCopy;	
+	return ulToCopy+sizeof(sPktTime);	
 }
 
 static ssize_t
