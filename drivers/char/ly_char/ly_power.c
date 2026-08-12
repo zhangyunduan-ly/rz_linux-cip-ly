@@ -58,8 +58,8 @@
 
 #define IO_MUX_NUM 64
 
-#define DELAY_CNT  6000 // 消抖时间
-#define DELAY_CNT1 1000 // 短消抖时间
+#define DELAY_CNT  1000 // 消抖时间
+#define DELAY_CNT1 100 // 短消抖时间
 
 /* 定义魔数 */
 #define POWER_MAGIC 'P'
@@ -214,8 +214,6 @@ static irqreturn_t poweroff_interrupt(int irq, void *dev_id)
 {
     int i = 0, cnt = 0;
 
-    pr_info("poweroff interrupt\n");
-
     // 短消抖去毛刺
     for (i = 0; i < DELAY_CNT1; i++) {
         udelay(1);
@@ -269,13 +267,6 @@ static int power_probe(struct platform_device *pdev)
 		return PTR_ERR(ly_power->battery_charge_gpios);
 	}
 
-    /* battery discharge gpio */
-	ly_power->battery_discharge_gpios = devm_gpiod_get(&pdev->dev, "battery-discharge", GPIOD_OUT_HIGH);
-	if (IS_ERR(ly_power->battery_discharge_gpios)) {
-		pr_err("power: cannot get battery discharge gpio\n");
-		return PTR_ERR(ly_power->battery_discharge_gpios);
-	}
-
     /* capacitor charge gpio */
 	ly_power->capacitor_charge_gpios = devm_gpiod_get(&pdev->dev, "capacitor-charge", GPIOD_OUT_LOW);
 	if (IS_ERR(ly_power->capacitor_charge_gpios)) {
@@ -297,6 +288,19 @@ static int power_probe(struct platform_device *pdev)
 		return PTR_ERR(ly_power->pfi_gpios);
 	}
 
+    /* battery discharge gpio */
+    if (gpiod_get_value(ly_power->pfi_gpios)) {
+        ly_power->battery_discharge_gpios = devm_gpiod_get(&pdev->dev, "battery-discharge", GPIOD_OUT_LOW);
+    } else {
+        ly_power->battery_discharge_gpios = devm_gpiod_get(&pdev->dev, "battery-discharge", GPIOD_OUT_HIGH);
+    }
+	if (IS_ERR(ly_power->battery_discharge_gpios)) {
+		pr_err("power: cannot get battery discharge gpio\n");
+		return PTR_ERR(ly_power->battery_discharge_gpios);
+	}
+
+    init_waitqueue_head(&ly_power->wait_q);
+
     ly_power->irq = gpiod_to_irq(ly_power->pfi_gpios);
     if (ly_power->irq < 0) {
         pr_err("power: cannot get IRQ number\n");
@@ -312,8 +316,6 @@ static int power_probe(struct platform_device *pdev)
     if (ret) {
         pr_err("power: cannot request IRQ\n");
     }
-
-    init_waitqueue_head(&ly_power->wait_q);
 
     ret = misc_register(&miscpower);
     if (ret < 0) {
