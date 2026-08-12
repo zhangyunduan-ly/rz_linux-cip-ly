@@ -13,6 +13,7 @@
 #include <linux/of.h>
 
 #define PHY_ID_YT8511		0x0000010a
+#define PHY_ID_YT8512		0x00000128
 #define PHY_ID_YT8521		0x0000011a
 #define PHY_ID_YT8531		0x4f51e91b
 #define PHY_ID_YT8531S		0x4f51e91a
@@ -131,6 +132,12 @@
 #define YT8511_DELAY_GE_TX_DIS	(0x2 << 4)
 #define YT8511_DELAY_FE_TX_EN	(0xf << 12)
 #define YT8511_DELAY_FE_TX_DIS	(0x2 << 12)
+
+#define YT8512_EXTREG_SLEEP_CONTROL	0x2027
+#define YT8512_EN_SLEEP_SW			BIT(15)
+
+#define YT8512_EXTREG_LED0			0x40C0
+#define YT8512_EXTREG_LED1			0x40C3
 
 /* Extended register is different from MMD Register and MII Register.
  * We can use ytphy_read_ext/ytphy_write_ext/ytphy_modify_ext function to
@@ -731,6 +738,26 @@ static int yt8511_config_init(struct phy_device *phydev)
 
 err_restore_page:
 	return phy_restore_page(phydev, oldpage, ret);
+}
+
+static int yt8512_config_init(struct phy_device *phydev)
+{
+	int ret;
+
+	ret = ytphy_modify_ext_with_lock(phydev, YT8512_EXTREG_LED0, 0xFFFF, 0x1300);
+	if (ret < 0)
+		return ret;
+
+	ret = ytphy_modify_ext_with_lock(phydev, YT8512_EXTREG_LED1, 0xFFFF, 0x0030);
+	if (ret < 0)
+		return ret;
+
+	/* disable auto sleep */
+	ret = ytphy_modify_ext_with_lock(phydev, YT8512_EXTREG_SLEEP_CONTROL, YT8512_EN_SLEEP_SW, 0);
+	if (ret < 0)
+		return ret;
+
+	return 0;
 }
 
 /**
@@ -2905,6 +2932,16 @@ static struct phy_driver motorcomm_phy_drvs[] = {
 		.write_page	= yt8511_write_page,
 	},
 	{
+		PHY_ID_MATCH_EXACT(PHY_ID_YT8512),
+		.name = "YT8512 100M Ethernet",
+		.config_init = yt8512_config_init,
+		.config_aneg = genphy_config_aneg,
+		.suspend	= genphy_suspend,
+		.resume		= genphy_resume,
+		.read_page	= yt8511_read_page,
+		.write_page	= yt8511_write_page,
+	},
+	{
 		PHY_ID_MATCH_EXACT(PHY_ID_YT8521),
 		.name		= "YT8521 Gigabit Ethernet",
 		.get_features	= yt8521_get_features,
@@ -2970,13 +3007,14 @@ static struct phy_driver motorcomm_phy_drvs[] = {
 
 module_phy_driver(motorcomm_phy_drvs);
 
-MODULE_DESCRIPTION("Motorcomm 8511/8521/8531/8531S/8821 PHY driver");
+MODULE_DESCRIPTION("Motorcomm 8511/8512/8521/8531/8531S/8821 PHY driver");
 MODULE_AUTHOR("Peter Geis");
 MODULE_AUTHOR("Frank");
 MODULE_LICENSE("GPL");
 
 static const struct mdio_device_id __maybe_unused motorcomm_tbl[] = {
 	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8511) },
+	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8512) },
 	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8521) },
 	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8531) },
 	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8531S) },
