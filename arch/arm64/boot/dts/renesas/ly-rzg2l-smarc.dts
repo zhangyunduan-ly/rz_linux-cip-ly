@@ -110,14 +110,14 @@
 		status = "okay";
 
 		emled_run {
-			gpios = <&pinctrl RZG2L_GPIO(16, 1) GPIO_ACTIVE_HIGH>;
+			gpios = <&pinctrl RZG2L_GPIO(16, 1) GPIO_ACTIVE_LOW>;
 			label = "EMLED_RUN";
 			default-state = "on";
 			linux,default-trigger = "none";
 		};
 
 		emled_alarm {
-			gpios = <&pinctrl RZG2L_GPIO(15, 0) GPIO_ACTIVE_HIGH>;
+			gpios = <&pinctrl RZG2L_GPIO(15, 0) GPIO_ACTIVE_LOW>;
 			label = "EMLED_ALARM";
 			default-state = "off";
 			linux,default-trigger = "none";
@@ -185,7 +185,7 @@
 		lcd-MOSI-gpios = <&pinctrl RZG2L_GPIO(19, 0) GPIO_ACTIVE_HIGH>;
 		lcd-CSB-gpios = <&pinctrl RZG2L_GPIO(45, 2) GPIO_ACTIVE_HIGH>;
 		lcd-RSTB-gpios = <&pinctrl RZG2L_GPIO(18, 0) GPIO_ACTIVE_HIGH>;
-		lcd-BL-gpios = <&pinctrl RZG2L_GPIO(45, 3) GPIO_ACTIVE_LOW>;
+		lcd-BL-gpios = <&pinctrl RZG2L_GPIO(45, 3) GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 
@@ -414,6 +414,7 @@
 	scif3_pins: scif3 {
 		pinmux = <RZG2L_PORT_PINMUX(0, 0, 5)>,	/* TxD */
 			 <RZG2L_PORT_PINMUX(0, 1, 5)>;	/* RxD */
+		bias-pull-up;
 	};
 
 	scif4_pins: scif4 {
@@ -429,6 +430,7 @@
 	sci1_pins: sci1 {
 		pinmux = <RZG2L_PORT_PINMUX(45, 1, 3)>, /* TxD */
 			 <RZG2L_PORT_PINMUX(45, 0, 3)>; /* RxD */
+		bias-pull-up;
 	};
 
 	spi0_pins: spi0 {
@@ -544,8 +546,6 @@
 &scif1 {
 	pinctrl-0 = <&scif1_pins>;
 	pinctrl-names = "default";
-	dmas = <&dmac 0x4e7d>, <&dmac 0x4e7e>;
-	dma-names = "tx", "rx";
 	uart-has-rtscts;
 	status = "okay";
 };
@@ -553,26 +553,20 @@
 &scif2 {
 	pinctrl-0 = <&scif2_pins>;
 	pinctrl-names = "default";
-	dmas = <&dmac 0x4e81>, <&dmac 0x4e82>;
-	dma-names = "tx", "rx";
 	rs485-enabled;
-	rs485-gpios = <&pinctrl RZG2L_GPIO(48, 2) GPIO_ACTIVE_LOW>;
+	rs485-gpios = <&pinctrl RZG2L_GPIO(48, 2) GPIO_ACTIVE_HIGH>;
 	status = "okay";
 };
 
 &scif3 {
 	pinctrl-0 = <&scif3_pins>;
 	pinctrl-names = "default";
-	dmas = <&dmac 0x4e85>, <&dmac 0x4e86>;
-	dma-names = "tx", "rx";
 	status = "okay";
 };
 
 &scif4 {
 	pinctrl-0 = <&scif4_pins>;
 	pinctrl-names = "default";
-	dmas = <&dmac 0x4e89>, <&dmac 0x4e8a>;
-	dma-names = "tx", "rx";
 	status = "okay";
 };
 
@@ -625,7 +619,6 @@
 		compatible = "rohm,dh2228fv";
 		reg = <0>;
 		spi-max-frequency = <50000000>;
-		spi-cpha;
 		status = "okay";
 	};
 };
